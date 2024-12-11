@@ -1,10 +1,10 @@
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Automerge where
 
 import Data.Aeson
   ( FromJSON (parseJSON),
+    Object,
     withObject,
     withText,
     (.:),
@@ -29,6 +29,13 @@ instance FromJSON Mark where
 -- TODO: Constrain to levels 1-6
 newtype HeadingLevel = HeadingLevel Int deriving (Show)
 
+instance FromJSON HeadingLevel where
+  parseJSON = withObject "HeadingLevel" $ \v -> do
+    level <- (v .: "level" :: Parser Int)
+    if level >= 1 && level <= 6
+      then pure $ HeadingLevel level
+      else fail "Invalid heading level"
+
 newtype Heading = Heading HeadingLevel deriving (Show)
 
 data BlockSpan
@@ -52,19 +59,22 @@ instance FromJSON AutomergeSpan where
   parseJSON = withObject "AutomergeSpan" $ \v -> do
     elementType <- (v .: "type" :: Parser String)
     case elementType of
-      "block" -> do
-        blockData <- v .: "value"
-        blockType <- (blockData .: "type" :: Parser String)
-        case blockType of
-          "paragraph" -> pure $ Block ParagraphSpan
-          "heading" -> do
-            level <- (blockData .: "level" :: Parser Int)
-            pure $ Block $ HeadingSpan $ Heading $ HeadingLevel level
-          "code-block" -> pure $ Block CodeBlockSpan
-          "blockquote" -> pure $ Block BlockQuoteSpan
-          "ordered-list-item" -> pure $ Block OrderedListItemSpan
-          "unordered-list-item" -> pure $ Block UnorderedListItemSpan
-          "image" -> pure $ Block ImageBlockSpan
-          _ -> fail "Invalid block type"
+      "block" -> parseBlock v
       "text" -> Inline <$> (TextSpan <$> v .: "value" <*> v .: "marks")
       _ -> fail "Unknown span type"
+
+parseBlock :: Object -> Parser AutomergeSpan
+parseBlock v = do
+  blockData <- v .: "value"
+  blockType <- (blockData .: "type" :: Parser String)
+  case blockType of
+    "paragraph" -> pure $ Block ParagraphSpan
+    "heading" -> do
+      level <- blockData .: "level"
+      pure $ Block $ HeadingSpan $ Heading $ HeadingLevel level
+    "code-block" -> pure $ Block CodeBlockSpan
+    "blockquote" -> pure $ Block BlockQuoteSpan
+    "ordered-list-item" -> pure $ Block OrderedListItemSpan
+    "unordered-list-item" -> pure $ Block UnorderedListItemSpan
+    "image" -> pure $ Block ImageBlockSpan
+    _ -> fail "Invalid block type"
