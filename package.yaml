@@ -37,6 +37,7 @@ library:
   source-dirs: src
   dependencies:
     - aeson >= 2.1.2.1 && < 2.3
+    - text >=2.0.0
 
 executables:
   v2-automerge-pandoc-exe:
