@@ -5,11 +5,13 @@ module Automerge where
 import Data.Aeson
   ( FromJSON (parseJSON),
     Object,
+    eitherDecode,
     withObject,
     withText,
     (.:),
   )
 import Data.Aeson.Types (Parser)
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 
 data Mark
@@ -81,3 +83,6 @@ parseBlock v = do
 
 parseInline :: Object -> Parser AutomergeSpan
 parseInline v = Inline <$> (TextSpan <$> v .: "value" <*> v .: "marks")
+
+parseAutomergeSpans :: BL.ByteString -> Either String [AutomergeSpan]
+parseAutomergeSpans = eitherDecode
