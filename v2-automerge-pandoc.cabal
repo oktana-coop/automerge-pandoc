@@ -7,11 +7,11 @@ cabal-version: 2.2
 name:           v2-automerge-pandoc
 version:        0.1.0.0
 description:    Please see the README on GitHub at <https://github.com/githubuser/v2-automerge-pandoc#readme>
-homepage:       https://github.com/githubuser/v2-automerge-pandoc#readme
-bug-reports:    https://github.com/githubuser/v2-automerge-pandoc/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2024 Author name here
+homepage:       https://github.com/githubuser/arisgk#readme
+bug-reports:    https://github.com/githubuser/arisgk/issues
+author:         Aris Goudouras
+maintainer:     aris.gk@gmail.com
+copyright:      2024 Aris Goudouras
 license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
@@ -21,7 +21,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/v2-automerge-pandoc
+  location: https://github.com/githubuser/arisgk
 
 library
   exposed-modules:
@@ -34,7 +34,8 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.7 && <5
+      aeson >=2.2.3 && <2.3
+    , base >=4.7 && <5
   default-language: Haskell2010
 
 executable v2-automerge-pandoc-exe
