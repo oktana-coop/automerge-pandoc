@@ -1,0 +1,67 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.37.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           v2-automerge-pandoc
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/v2-automerge-pandoc#readme>
+homepage:       https://github.com/githubuser/v2-automerge-pandoc#readme
+bug-reports:    https://github.com/githubuser/v2-automerge-pandoc/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2024 Author name here
+license:        BSD-3-Clause
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/v2-automerge-pandoc
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_v2_automerge_pandoc
+  autogen-modules:
+      Paths_v2_automerge_pandoc
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      base >=4.7 && <5
+  default-language: Haskell2010
+
+executable v2-automerge-pandoc-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_v2_automerge_pandoc
+  autogen-modules:
+      Paths_v2_automerge_pandoc
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , v2-automerge-pandoc
+  default-language: Haskell2010
+
+test-suite v2-automerge-pandoc-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_v2_automerge_pandoc
+  autogen-modules:
+      Paths_v2_automerge_pandoc
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , v2-automerge-pandoc
+  default-language: Haskell2010
