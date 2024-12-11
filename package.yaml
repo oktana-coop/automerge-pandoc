@@ -36,7 +36,7 @@ ghc-options:
 library:
   source-dirs: src
   dependencies:
-    - aeson >= 2.2.3 && < 2.3
+    - aeson >= 2.2.3.0 && < 2.3
 
 executables:
   v2-automerge-pandoc-exe:
