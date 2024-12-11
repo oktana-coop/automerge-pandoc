@@ -60,7 +60,7 @@ instance FromJSON AutomergeSpan where
     elementType <- (v .: "type" :: Parser String)
     case elementType of
       "block" -> parseBlock v
-      "text" -> Inline <$> (TextSpan <$> v .: "value" <*> v .: "marks")
+      "text" -> parseInline v
       _ -> fail "Unknown span type"
 
 parseBlock :: Object -> Parser AutomergeSpan
@@ -78,3 +78,6 @@ parseBlock v = do
     "unordered-list-item" -> pure $ Block UnorderedListItemSpan
     "image" -> pure $ Block ImageBlockSpan
     _ -> fail "Invalid block type"
+
+parseInline :: Object -> Parser AutomergeSpan
+parseInline v = Inline <$> (TextSpan <$> v .: "value" <*> v .: "marks")
