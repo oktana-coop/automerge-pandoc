@@ -1,10 +1,10 @@
 name: v2-automerge-pandoc
 version: 0.1.0.0
-github: "githubuser/v2-automerge-pandoc"
+github: "githubuser/arisgk"
 license: BSD-3-Clause
-author: "Author name here"
-maintainer: "example@example.com"
-copyright: "2024 Author name here"
+author: "Aris Goudouras"
+maintainer: "aris.gk@gmail.com"
+copyright: "2024 Aris Goudouras"
 
 extra-source-files:
   - README.md
