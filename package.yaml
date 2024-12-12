@@ -39,6 +39,8 @@ library:
     - aeson >= 2.1.2.1 && < 2.3
     - bytestring >= 0.11.5.3
     - text >=2.0.0
+    - pandoc >= 3.1
+    - pandoc-types >= 1.23.1
 
 executables:
   automerge-pandoc:

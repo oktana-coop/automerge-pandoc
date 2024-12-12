@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans) where
+module Automerge (parseAutomergeSpans, AutomergeSpan) where
 
 import Data.Aeson
   ( FromJSON (parseJSON),
