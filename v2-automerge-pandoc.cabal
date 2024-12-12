@@ -26,7 +26,6 @@ source-repository head
 library
   exposed-modules:
       Automerge
-      Lib
   other-modules:
       Paths_v2_automerge_pandoc
   autogen-modules:
@@ -41,7 +40,7 @@ library
     , text >=2.0.0
   default-language: Haskell2010
 
-executable v2-automerge-pandoc-exe
+executable automerge-pandoc
   main-is: Main.hs
   other-modules:
       Paths_v2_automerge_pandoc
@@ -52,10 +51,12 @@ executable v2-automerge-pandoc-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , bytestring >=0.11.5.3
+    , raw-strings-qq >=1.1
     , v2-automerge-pandoc
   default-language: Haskell2010
 
-test-suite v2-automerge-pandoc-test
+test-suite automerge-pandoc-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:

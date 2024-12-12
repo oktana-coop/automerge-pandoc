@@ -1,17 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge where
+module Automerge (parseAutomergeSpans) where
 
 import Data.Aeson
   ( FromJSON (parseJSON),
     Object,
     eitherDecode,
     withObject,
+    withScientific,
     withText,
     (.:),
+    (.:?),
   )
 import Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Lazy as BL
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 
 data Mark
@@ -32,8 +35,8 @@ instance FromJSON Mark where
 newtype HeadingLevel = HeadingLevel Int deriving (Show)
 
 instance FromJSON HeadingLevel where
-  parseJSON = withObject "HeadingLevel" $ \v -> do
-    level <- (v .: "level" :: Parser Int)
+  parseJSON = withScientific "HeadingLevel" $ \n -> do
+    let level = floor n
     if level >= 1 && level <= 6
       then pure $ HeadingLevel level
       else fail "Invalid heading level"
@@ -72,7 +75,8 @@ parseBlock v = do
   case blockType of
     "paragraph" -> pure $ Block ParagraphSpan
     "heading" -> do
-      level <- blockData .: "level"
+      attrs <- blockData .: "attrs"
+      level <- attrs .: "level"
       pure $ Block $ HeadingSpan $ Heading $ HeadingLevel level
     "code-block" -> pure $ Block CodeBlockSpan
     "blockquote" -> pure $ Block BlockQuoteSpan
@@ -82,7 +86,10 @@ parseBlock v = do
     _ -> fail "Invalid block type"
 
 parseInline :: Object -> Parser AutomergeSpan
-parseInline v = Inline <$> (TextSpan <$> v .: "value" <*> v .: "marks")
+parseInline v = do
+  parsedValue <- v .: "value"
+  parsedMarks <- fromMaybe [] <$> v .:? "marks"
+  pure $ Inline $ TextSpan parsedValue parsedMarks
 
 parseAutomergeSpans :: BL.ByteString -> Either String [AutomergeSpan]
 parseAutomergeSpans = eitherDecode

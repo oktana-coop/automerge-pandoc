@@ -41,7 +41,7 @@ library:
     - text >=2.0.0
 
 executables:
-  v2-automerge-pandoc-exe:
+  automerge-pandoc:
     main: Main.hs
     source-dirs: app
     ghc-options:
@@ -50,9 +50,11 @@ executables:
       - -with-rtsopts=-N
     dependencies:
       - v2-automerge-pandoc
+      - bytestring >= 0.11.5.3
+      - raw-strings-qq >= 1.1
 
 tests:
-  v2-automerge-pandoc-test:
+  automerge-pandoc-test:
     main: Spec.hs
     source-dirs: test
     ghc-options:
