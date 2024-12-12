@@ -1,5 +1,12 @@
 module PandocReader where
 
 import Automerge (AutomergeSpan)
+import Data.List (foldl')
+import Text.Pandoc.Class
+import Text.Pandoc.Definition
 
--- readAutomerge :: (PandocMonad m, ToSources a) => ReaderOptions -> a -> m Pandoc
+convertAutomergeSpans :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc
+convertAutomergeSpans spans = pure . Pandoc nullMeta $ foldl' convertAutomergeSpan [] spans
+
+convertAutomergeSpan :: [Block] -> AutomergeSpan -> [Block]
+convertAutomergeSpan _ _ = []
