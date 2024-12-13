@@ -1,7 +1,7 @@
 module PandocReader where
 
 import Automerge (AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), TextSpan (..))
-import Data.Foldable (foldl', toList) -- Import foldl' from Data.Foldable
+import Data.Foldable (foldl') -- Import foldl' from Data.Foldable
 import Data.Sequence as Seq (Seq (Empty))
 import qualified Data.Text as T
 import Text.Pandoc.Builder (Blocks, Many (..), blockQuote, codeBlock, doc, header, para, str)
