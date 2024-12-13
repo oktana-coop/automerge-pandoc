@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, AutomergeSpan) where
+module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..)) where
 
 import Data.Aeson
   ( FromJSON (parseJSON),
@@ -36,21 +36,21 @@ instance FromJSON HeadingLevel where
 
 newtype Heading = Heading HeadingLevel deriving (Show)
 
-data BlockSpan
-  = ParagraphSpan
-  | HeadingSpan Heading
-  | CodeBlockSpan
-  | BlockQuoteSpan
-  | OrderedListItemSpan
-  | UnorderedListItemSpan
-  | ImageBlockSpan
+data BlockMarker
+  = ParagraphMarker
+  | HeadingMarker Heading
+  | CodeBlockMarker
+  | BlockQuoteMarker
+  | OrderedListItemMarker
+  | UnorderedListItemMarker
+  | ImageBlockMarker
   deriving (Show)
 
-data TextSpan = TextSpan {value :: T.Text, marks :: [Mark]} deriving (Show)
+data TextSpan = AutomergeText {value :: T.Text, marks :: [Mark]} deriving (Show)
 
 data AutomergeSpan
-  = Block BlockSpan
-  | Inline TextSpan
+  = BlockSpan BlockMarker
+  | TextSpan TextSpan
   deriving (Show)
 
 instance FromJSON AutomergeSpan where
@@ -66,16 +66,16 @@ parseBlock v = do
   blockData <- v .: "value"
   blockType <- (blockData .: "type" :: Parser String)
   case blockType of
-    "paragraph" -> pure $ Block ParagraphSpan
+    "paragraph" -> pure $ BlockSpan ParagraphMarker
     "heading" -> do
       attrs <- blockData .: "attrs"
       level <- attrs .: "level"
-      pure $ Block $ HeadingSpan $ Heading $ HeadingLevel level
-    "code-block" -> pure $ Block CodeBlockSpan
-    "blockquote" -> pure $ Block BlockQuoteSpan
-    "ordered-list-item" -> pure $ Block OrderedListItemSpan
-    "unordered-list-item" -> pure $ Block UnorderedListItemSpan
-    "image" -> pure $ Block ImageBlockSpan
+      pure $ BlockSpan $ HeadingMarker $ Heading $ HeadingLevel level
+    "code-block" -> pure $ BlockSpan CodeBlockMarker
+    "blockquote" -> pure $ BlockSpan BlockQuoteMarker
+    "ordered-list-item" -> pure $ BlockSpan OrderedListItemMarker
+    "unordered-list-item" -> pure $ BlockSpan UnorderedListItemMarker
+    "image" -> pure $ BlockSpan ImageBlockMarker
     _ -> fail "Invalid block type"
 
 parseInline :: Object -> Parser AutomergeSpan
@@ -83,7 +83,7 @@ parseInline v = do
   parsedValue <- v .: "value"
   marksKeyMap <- v .:? "marks" .!= KM.empty
   let parsedMarks = parseMarks marksKeyMap
-  pure $ Inline $ TextSpan parsedValue parsedMarks
+  pure $ TextSpan $ AutomergeText parsedValue parsedMarks
 
 parseMarks :: KM.KeyMap Value -> [Mark]
 parseMarks = mapMaybe parseMark . KM.toList
