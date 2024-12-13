@@ -27,6 +27,7 @@ library
   exposed-modules:
       Automerge
       PandocReader
+      Utils
   other-modules:
       Paths_v2_automerge_pandoc
   autogen-modules:
