@@ -57,7 +57,10 @@ executable automerge-pandoc
   build-depends:
       base >=4.7 && <5
     , bytestring >=0.11.5.3
+    , pandoc >=3.1
+    , pandoc-types >=1.23.1
     , raw-strings-qq >=1.1
+    , text >=2.0.0
     , v2-automerge-pandoc
   default-language: Haskell2010
 

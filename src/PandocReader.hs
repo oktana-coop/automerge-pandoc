@@ -1,4 +1,4 @@
-module PandocReader where
+module PandocReader (toPandoc) where
 
 import Automerge (AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), Mark (..), TextSpan (..))
 import Data.Foldable (foldl') -- Import foldl' from Data.Foldable
