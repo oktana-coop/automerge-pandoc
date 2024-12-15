@@ -4,7 +4,7 @@ import Automerge (AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLev
 import Data.Foldable (foldl') -- Import foldl' from Data.Foldable
 import Data.Sequence as Seq (Seq (Empty))
 import qualified Data.Text as T
-import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlock, codeBlockWith, doc, emph, header, headerWith, para, str, strong)
+import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlock, codeBlockWith, doc, emph, fromList, header, headerWith, para, str, strong)
 import Text.Pandoc.Class
 import Text.Pandoc.Definition
 import Utils (lastValue, withoutLast)
@@ -33,12 +33,15 @@ convertAndWrapToParagraph :: TextSpan -> Blocks
 convertAndWrapToParagraph = para . convertTextSpan
 
 convertAndAddTo :: Block -> TextSpan -> Blocks
-convertAndAddTo block = case block of
-  Para _ -> para . convertTextSpan
-  Header level attr _ -> headerWith attr level . convertTextSpan
-  CodeBlock attr _ -> codeBlockWith attr . value
-  BlockQuote _ -> blockQuote . para . convertTextSpan
+convertAndAddTo block textSpan = case block of
+  Para inlines -> para $ addTextSpanToInlines (fromList inlines) textSpan
+  Header level attr inlines -> headerWith attr level $ addTextSpanToInlines (fromList inlines) textSpan
+  CodeBlock attr _ -> codeBlockWith attr $ value textSpan
+  BlockQuote _ -> blockQuote $ convertAndWrapToParagraph textSpan
   _ -> undefined
+
+addTextSpanToInlines :: Inlines -> TextSpan -> Inlines
+addTextSpanToInlines inlines textSpan = inlines <> convertTextSpan textSpan
 
 convertTextSpan :: TextSpan -> Inlines
 convertTextSpan = convertMarksToInlines <*> convertTextToInlines
