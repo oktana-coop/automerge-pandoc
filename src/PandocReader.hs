@@ -7,7 +7,7 @@ import qualified Data.Text as T
 import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlock, codeBlockWith, doc, emph, header, headerWith, para, str, strong)
 import Text.Pandoc.Class
 import Text.Pandoc.Definition
-import Utils (lastValue)
+import Utils (lastValue, withoutLast)
 
 toPandoc :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc
 toPandoc spans = pure . doc $ convertAutomergeSpans spans
@@ -17,7 +17,9 @@ convertAutomergeSpans = foldl' convertAutomergeSpan (Many Seq.Empty)
 
 convertAutomergeSpan :: Blocks -> AutomergeSpan -> Blocks
 convertAutomergeSpan acc (BlockSpan blockSpan) = acc <> convertBlockSpan blockSpan
-convertAutomergeSpan acc (TextSpan textSpan) = acc <> convertAndWrapTextSpan (lastValue acc) textSpan
+convertAutomergeSpan acc (TextSpan textSpan) = case lastValue acc of
+  Nothing -> acc <> convertAndWrapToParagraph textSpan
+  Just block -> withoutLast acc <> convertAndAddTo block textSpan
 
 convertBlockSpan :: BlockMarker -> Blocks
 convertBlockSpan blockSpan = case blockSpan of
@@ -27,13 +29,15 @@ convertBlockSpan blockSpan = case blockSpan of
   BlockQuoteMarker -> blockQuote $ Many Seq.Empty
   _ -> undefined -- more blocks to be implemented
 
-convertAndWrapTextSpan :: Maybe Block -> TextSpan -> Blocks
-convertAndWrapTextSpan Nothing textSpan = para $ convertTextSpan textSpan
-convertAndWrapTextSpan (Just block) textSpan = case block of
-  Para _ -> para $ convertTextSpan textSpan
-  Header level attr _ -> headerWith attr level $ convertTextSpan textSpan
-  CodeBlock attr _ -> codeBlockWith attr $ value textSpan
-  BlockQuote _ -> blockQuote $ para $ convertTextSpan textSpan
+convertAndWrapToParagraph :: TextSpan -> Blocks
+convertAndWrapToParagraph = para . convertTextSpan
+
+convertAndAddTo :: Block -> TextSpan -> Blocks
+convertAndAddTo block = case block of
+  Para _ -> para . convertTextSpan
+  Header level attr _ -> headerWith attr level . convertTextSpan
+  CodeBlock attr _ -> codeBlockWith attr . value
+  BlockQuote _ -> blockQuote . para . convertTextSpan
   _ -> undefined
 
 convertTextSpan :: TextSpan -> Inlines
