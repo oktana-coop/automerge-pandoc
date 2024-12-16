@@ -1,22 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), TextSpan (..), Mark (..)) where
+module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), TextSpan (..), Mark (..), toJSONText) where
 
-import Data.Aeson
-  ( FromJSON (parseJSON),
-    Object,
-    eitherDecode,
-    withObject,
-    withScientific,
-    (.:),
-    (.:?),
-  )
+import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool), eitherDecode, encode, object, withObject, withScientific, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as KM
-import Data.Aeson.Types (Parser, Value (Bool), (.!=))
+import Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BSL8
 import Data.Maybe (mapMaybe)
 import qualified Data.Text as T
+import Data.Text.Encoding (decodeUtf8)
 
 data Mark
   = Strong
@@ -103,3 +97,97 @@ parseMarks = mapMaybe parseMark . KM.toList
 
 parseAutomergeSpans :: BL.ByteString -> Either String [AutomergeSpan]
 parseAutomergeSpans = eitherDecode
+
+instance ToJSON AutomergeSpan where
+  toJSON (BlockSpan blockMarker) = case blockMarker of
+    ParagraphMarker ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= Bool True,
+                "parents" .= ([] :: [T.Text]),
+                "type" .= T.pack "paragraph",
+                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+              ]
+        ]
+    HeadingMarker (Heading (HeadingLevel level)) ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= Bool True,
+                "parents" .= ([] :: [T.Text]),
+                "type" .= T.pack "heading",
+                "attrs" .= object ["level" .= level]
+              ]
+        ]
+    CodeBlockMarker ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= Bool True,
+                "parents" .= ([] :: [T.Text]),
+                "type" .= T.pack "code-block",
+                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+              ]
+        ]
+    BlockQuoteMarker ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= Bool True,
+                "parents" .= ([] :: [T.Text]),
+                "type" .= T.pack "blockquote",
+                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+              ]
+        ]
+    OrderedListItemMarker ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= Bool True,
+                "parents" .= ([] :: [T.Text]),
+                "type" .= T.pack "ordered-list-item",
+                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+              ]
+        ]
+    UnorderedListItemMarker ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= Bool True,
+                "parents" .= ([] :: [T.Text]),
+                "type" .= T.pack "unordered-list-item",
+                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+              ]
+        ]
+    ImageBlockMarker ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= Bool True,
+                "parents" .= ([] :: [T.Text]),
+                "type" .= T.pack "image",
+                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+              ]
+        ]
+  toJSON (TextSpan (AutomergeText val extractedMarks)) =
+    object $
+      [ "type" .= T.pack "text",
+        "value" .= val
+      ]
+        <> ["marks" .= KM.fromList (map markToKeyVal extractedMarks) | not (null extractedMarks)]
+    where
+      markToKeyVal mark = case mark of
+        Strong -> (K.fromText "strong", Bool True)
+        Emphasis -> (K.fromText "em", Bool True)
+        Link -> (K.fromText "link", Bool True)
+
+toJSONText :: [AutomergeSpan] -> T.Text
+toJSONText = decodeUtf8 . BSL8.toStrict . encode
