@@ -48,6 +48,12 @@ data BlockMarker
 
 data TextSpan = AutomergeText {value :: T.Text, marks :: [Mark]} deriving (Show)
 
+instance Semigroup TextSpan where
+  (<>) (AutomergeText value1 marks1) (AutomergeText value2 marks2) = AutomergeText (value1 <> value2) (marks1 <> marks2)
+
+instance Monoid TextSpan where
+  mempty = AutomergeText T.empty []
+
 data AutomergeSpan
   = BlockSpan BlockMarker
   | TextSpan TextSpan
