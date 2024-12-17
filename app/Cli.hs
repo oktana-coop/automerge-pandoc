@@ -4,19 +4,21 @@ import Options.Applicative (Parser, ReadM, argument, command, eitherReader, exec
 
 data Command
   = ConvertFromAutomerge Format String
-  | ConvertToAutomerge String
+  | ConvertToAutomerge Format String
   deriving (Show)
 
-data Format = Pandoc | Automerge | Markdown | HTML deriving (Show)
+data Format = Pandoc | Markdown | HTML deriving (Show)
 
-formatParser :: Parser Format
-formatParser = option readFormat (long "to" <> metavar "FORMAT" <> help "Specify the format (pandoc, automerge, markdown, html)")
+outputFormatParser :: Parser Format
+outputFormatParser = option readFormat (long "to" <> metavar "FORMAT" <> help "Specify the format (pandoc, markdown, html)")
+
+inputFormatParser :: Parser Format
+inputFormatParser = option readFormat (long "from" <> metavar "FORMAT" <> help "Specify the format (pandoc, markdown, html)")
 
 readFormat :: ReadM Format
 readFormat = eitherReader $ \arg ->
   case arg of
     "pandoc" -> Right Pandoc
-    "automerge" -> Right Automerge
     "markdown" -> Right Markdown
     "html" -> Right HTML
     _ -> Left $ "Unknown format: " ++ arg
@@ -24,8 +26,8 @@ readFormat = eitherReader $ \arg ->
 commandParser :: Parser Command
 commandParser =
   subparser
-    ( command "fromAutomerge" (info (ConvertFromAutomerge <$> formatParser <*> argument str (metavar "AUTOMERGE_SPANS_JSON")) (progDesc "Convert from Automerge Spans JSON to the output format"))
-        <> command "toAutomerge" (info (ConvertToAutomerge <$> argument str (metavar "MARKDOWN_DATA")) (progDesc "Convert from Markdown to Automerge Spans JSON"))
+    ( command "fromAutomerge" (info (ConvertFromAutomerge <$> outputFormatParser <*> argument str (metavar "AUTOMERGE_SPANS_JSON")) (progDesc "Convert from Automerge Spans JSON to the output format"))
+        <> command "toAutomerge" (info (ConvertToAutomerge <$> inputFormatParser <*> argument str (metavar "MARKDOWN_DATA")) (progDesc "Convert from the input format to Automerge Spans JSON"))
     )
 
 readInputCommand :: IO Command
