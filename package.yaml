@@ -1,4 +1,4 @@
-name: v2-automerge-pandoc
+name: automerge-pandoc
 version: 0.1.0.0
 github: "githubuser/arisgk"
 license: BSD-3-Clause
@@ -17,7 +17,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description: Please see the README on GitHub at <https://github.com/githubuser/v2-automerge-pandoc#readme>
+description: Please see the README on GitHub at <https://github.com/githubuser/automerge-pandoc#readme>
 
 dependencies:
   - base >= 4.7 && < 5
@@ -52,7 +52,7 @@ executables:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - v2-automerge-pandoc
+      - automerge-pandoc
       - bytestring >= 0.11.5.3
       - raw-strings-qq >= 1.1
       - text >=2.0.0
@@ -69,4 +69,4 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - v2-automerge-pandoc
+      - automerge-pandoc

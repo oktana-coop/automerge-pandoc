@@ -1,4 +1,4 @@
-# v2-automerge-pandoc
+# automerge-pandoc
 
 CLI tool that converts Automerge spans to Pandoc AST. Built using Haskell.
 

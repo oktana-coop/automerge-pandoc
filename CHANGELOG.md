@@ -1,4 +1,4 @@
-# Changelog for `v2-automerge-pandoc`
+# Changelog for `automerge-pandoc`
 
 All notable changes to this project will be documented in this file.
 

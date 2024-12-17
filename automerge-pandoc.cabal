@@ -4,9 +4,9 @@ cabal-version: 2.2
 --
 -- see: https://github.com/sol/hpack
 
-name:           v2-automerge-pandoc
+name:           automerge-pandoc
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/v2-automerge-pandoc#readme>
+description:    Please see the README on GitHub at <https://github.com/githubuser/automerge-pandoc#readme>
 homepage:       https://github.com/githubuser/arisgk#readme
 bug-reports:    https://github.com/githubuser/arisgk/issues
 author:         Aris Goudouras
@@ -30,9 +30,9 @@ library
       PandocWriter
       Utils
   other-modules:
-      Paths_v2_automerge_pandoc
+      Paths_automerge_pandoc
   autogen-modules:
-      Paths_v2_automerge_pandoc
+      Paths_automerge_pandoc
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
@@ -50,34 +50,34 @@ executable automerge-pandoc
   main-is: Main.hs
   other-modules:
       Cli
-      Paths_v2_automerge_pandoc
+      Paths_automerge_pandoc
   autogen-modules:
-      Paths_v2_automerge_pandoc
+      Paths_automerge_pandoc
   hs-source-dirs:
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      automerge-pandoc
+    , base >=4.7 && <5
     , bytestring >=0.11.5.3
     , optparse-applicative >=0.18.1.0
     , pandoc >=3.1
     , pandoc-types >=1.23.1
     , raw-strings-qq >=1.1
     , text >=2.0.0
-    , v2-automerge-pandoc
   default-language: Haskell2010
 
 test-suite automerge-pandoc-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_v2_automerge_pandoc
+      Paths_automerge_pandoc
   autogen-modules:
-      Paths_v2_automerge_pandoc
+      Paths_automerge_pandoc
   hs-source-dirs:
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
-    , v2-automerge-pandoc
+      automerge-pandoc
+    , base >=4.7 && <5
   default-language: Haskell2010
