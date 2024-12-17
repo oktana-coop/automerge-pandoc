@@ -105,7 +105,7 @@ instance ToJSON AutomergeSpan where
         [ "type" .= T.pack "block",
           "value"
             .= object
-              [ "isEmbed" .= Bool True,
+              [ "isEmbed" .= Bool False,
                 "parents" .= ([] :: [T.Text]),
                 "type" .= T.pack "paragraph",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
@@ -116,7 +116,7 @@ instance ToJSON AutomergeSpan where
         [ "type" .= T.pack "block",
           "value"
             .= object
-              [ "isEmbed" .= Bool True,
+              [ "isEmbed" .= Bool False,
                 "parents" .= ([] :: [T.Text]),
                 "type" .= T.pack "heading",
                 "attrs" .= object ["level" .= level]
@@ -127,7 +127,7 @@ instance ToJSON AutomergeSpan where
         [ "type" .= T.pack "block",
           "value"
             .= object
-              [ "isEmbed" .= Bool True,
+              [ "isEmbed" .= Bool False,
                 "parents" .= ([] :: [T.Text]),
                 "type" .= T.pack "code-block",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
@@ -138,7 +138,7 @@ instance ToJSON AutomergeSpan where
         [ "type" .= T.pack "block",
           "value"
             .= object
-              [ "isEmbed" .= Bool True,
+              [ "isEmbed" .= Bool False,
                 "parents" .= ([] :: [T.Text]),
                 "type" .= T.pack "blockquote",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
@@ -160,7 +160,7 @@ instance ToJSON AutomergeSpan where
         [ "type" .= T.pack "block",
           "value"
             .= object
-              [ "isEmbed" .= Bool True,
+              [ "isEmbed" .= Bool False,
                 "parents" .= ([] :: [T.Text]),
                 "type" .= T.pack "unordered-list-item",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
@@ -171,7 +171,7 @@ instance ToJSON AutomergeSpan where
         [ "type" .= T.pack "block",
           "value"
             .= object
-              [ "isEmbed" .= Bool True,
+              [ "isEmbed" .= Bool False,
                 "parents" .= ([] :: [T.Text]),
                 "type" .= T.pack "image",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
