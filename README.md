@@ -1,6 +1,6 @@
 # automerge-pandoc
 
-CLI tool that converts Automerge spans to/from other formats, leveraging [Pandoc](https://pandoc.org/). Built using [Haskell](https://www.haskell.org/).
+CLI tool that converts [Automerge rich text](https://automerge.org/docs/under-the-hood/rich_text_schema/) to/from other formats, leveraging [Pandoc](https://pandoc.org/). Built using [Haskell](https://www.haskell.org/).
 
 ## How it Works
 
