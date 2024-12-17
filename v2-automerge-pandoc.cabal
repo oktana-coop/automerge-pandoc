@@ -49,6 +49,7 @@ library
 executable automerge-pandoc
   main-is: Main.hs
   other-modules:
+      Cli
       Paths_v2_automerge_pandoc
   autogen-modules:
       Paths_v2_automerge_pandoc
