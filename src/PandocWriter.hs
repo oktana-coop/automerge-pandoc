@@ -22,11 +22,26 @@ blockToAutomergeSpans block = case block of
   _ -> [] -- Ignore blocks we don't recognize. TODO: Implement something more sophisticated here.
 
 inlinesToAutomergeTextSpans :: [Inline] -> [TextSpan]
-inlinesToAutomergeTextSpans = foldMap inlineToTextSpan
+inlinesToAutomergeTextSpans = mergeSameMarkSpans . foldMap inlineToTextSpan
+
+mergeSameMarkSpans :: [TextSpan] -> [TextSpan]
+mergeSameMarkSpans = foldr mergeOrAppendAdjacent []
+
+-- This is the folding function for merging the adjacent elements if their marks are the same
+mergeOrAppendAdjacent :: TextSpan -> [TextSpan] -> [TextSpan]
+mergeOrAppendAdjacent x [] = [x]
+-- pattern-match on: the current element (x), the one to its right (firstOfRest) and the rest of the fold
+mergeOrAppendAdjacent x (firstOfRest : rest) =
+  if marks x == marks firstOfRest
+    -- if the element's marks are the same with the one to its right, we merge them and then add them to the rest of the fold.
+    then (x <> firstOfRest) : rest
+    -- if they are not the same we end up with an extra text span in the list for the current element (we prepend it to the existing list for the fold.)
+    else x : firstOfRest : rest
 
 inlineToTextSpan :: Inline -> [TextSpan]
 inlineToTextSpan inline = case inline of
   Str str -> [AutomergeText str []]
+  Space -> [AutomergeText (T.pack " ") []]
   Text.Pandoc.Definition.Strong inlines -> addMark Automerge.Strong inlines
   Text.Pandoc.Definition.Emph inlines -> addMark Automerge.Emphasis inlines
   -- TODO: Handle other inline elements

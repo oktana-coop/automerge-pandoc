@@ -16,7 +16,7 @@ data Mark
   = Strong
   | Emphasis
   | Link
-  deriving (Show)
+  deriving (Show, Eq)
 
 -- TODO: Constrain to levels 1-6
 newtype HeadingLevel = HeadingLevel Int deriving (Show)
@@ -40,7 +40,7 @@ data BlockMarker
   | ImageBlockMarker
   deriving (Show)
 
-data TextSpan = AutomergeText {value :: T.Text, marks :: [Mark]} deriving (Show)
+data TextSpan = AutomergeText {value :: T.Text, marks :: [Mark]} deriving (Show, Eq)
 
 instance Semigroup TextSpan where
   (<>) (AutomergeText value1 marks1) (AutomergeText value2 marks2) = AutomergeText (value1 <> value2) (marks1 <> marks2)
