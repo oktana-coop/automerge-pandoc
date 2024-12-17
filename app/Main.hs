@@ -16,13 +16,13 @@ writeTo :: (PandocMonad m) => Format -> WriterOptions -> Pandoc -> m T.Text
 writeTo format = case format of
   Cli.Pandoc -> writeNative
   Cli.Markdown -> writeMarkdown
-  Cli.HTML -> writeHtml5String
+  Cli.Html -> writeHtml5String
 
 readFrom :: Format -> ReaderOptions -> T.Text -> PandocIO Pandoc
 readFrom format = case format of
   Cli.Pandoc -> readNative
   Cli.Markdown -> readMarkdown
-  Cli.HTML -> readHtml
+  Cli.Html -> readHtml
 
 convertFromAutomerge :: Format -> String -> IO ()
 convertFromAutomerge format input = do

@@ -7,7 +7,7 @@ data Command
   | ConvertToAutomerge Format String
   deriving (Show)
 
-data Format = Pandoc | Markdown | HTML deriving (Show)
+data Format = Pandoc | Markdown | Html deriving (Show)
 
 outputFormatParser :: Parser Format
 outputFormatParser = option readFormat (long "to" <> metavar "FORMAT" <> help "Specify the format (pandoc, markdown, html)")
@@ -20,7 +20,7 @@ readFormat = eitherReader $ \arg ->
   case arg of
     "pandoc" -> Right Pandoc
     "markdown" -> Right Markdown
-    "html" -> Right HTML
+    "html" -> Right Html
     _ -> Left $ "Unknown format: " ++ arg
 
 commandParser :: Parser Command
