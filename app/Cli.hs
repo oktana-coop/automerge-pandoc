@@ -27,7 +27,7 @@ commandParser :: Parser Command
 commandParser =
   subparser
     ( command "fromAutomerge" (info (ConvertFromAutomerge <$> outputFormatParser <*> argument str (metavar "AUTOMERGE_SPANS_JSON")) (progDesc "Convert from Automerge Spans JSON to the output format"))
-        <> command "toAutomerge" (info (ConvertToAutomerge <$> inputFormatParser <*> argument str (metavar "MARKDOWN_DATA")) (progDesc "Convert from the input format to Automerge Spans JSON"))
+        <> command "toAutomerge" (info (ConvertToAutomerge <$> inputFormatParser <*> argument str (metavar "INPUT_DATA")) (progDesc "Convert from the input format to Automerge Spans JSON"))
     )
 
 readInputCommand :: IO Command
