@@ -1,7 +1,7 @@
 name: automerge-pandoc
 version: 0.1.0.0
 github: "githubuser/arisgk"
-license: BSD-3-Clause
+license: GPL-3.0
 author: "Aris Goudouras"
 maintainer: "aris.gk@gmail.com"
 copyright: "2024 Aris Goudouras"
