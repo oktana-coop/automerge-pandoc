@@ -1,4 +1,4 @@
-cabal-version: 2.2
+cabal-version: 1.12
 
 -- This file has been generated from package.yaml by hpack version 0.37.0.
 --
@@ -12,7 +12,7 @@ bug-reports:    https://github.com/githubuser/arisgk/issues
 author:         Aris Goudouras
 maintainer:     aris.gk@gmail.com
 copyright:      2024 Aris Goudouras
-license:        BSD-3-Clause
+license:        GPL-3.0
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
@@ -30,19 +30,17 @@ library
       Utils
   other-modules:
       Paths_automerge_pandoc
-  autogen-modules:
-      Paths_automerge_pandoc
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      aeson >=2.1.2.1 && <2.3
+      aeson >=2.2.3.0
     , base >=4.7 && <5
-    , bytestring >=0.11.5.3
-    , containers >=0.6.7
-    , pandoc >=3.1
+    , bytestring >=0.12.1.0
+    , containers >=0.7
+    , pandoc >=3.6.2
     , pandoc-types >=1.23.1
-    , text >=2.0.0
+    , text >=2.1.1
   default-language: Haskell2010
 
 executable automerge-pandoc
@@ -50,28 +48,24 @@ executable automerge-pandoc
   other-modules:
       Cli
       Paths_automerge_pandoc
-  autogen-modules:
-      Paths_automerge_pandoc
   hs-source-dirs:
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       automerge-pandoc
     , base >=4.7 && <5
-    , bytestring >=0.11.5.3
+    , bytestring >=0.12.1.0
     , optparse-applicative >=0.18.1.0
-    , pandoc >=3.1
+    , pandoc >=3.6.2
     , pandoc-types >=1.23.1
     , raw-strings-qq >=1.1
-    , text >=2.0.0
+    , text >=2.1.1
   default-language: Haskell2010
 
 test-suite automerge-pandoc-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_automerge_pandoc
-  autogen-modules:
       Paths_automerge_pandoc
   hs-source-dirs:
       test
