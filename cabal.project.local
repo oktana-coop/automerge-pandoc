@@ -53,6 +53,12 @@ if arch(wasm32)
     location: https://github.com/haskell-wasm/hs-memory.git
     tag: a198a76c584dc2cfdcde6b431968de92a5fed65e
 
+  source-repository-package
+    type: git
+    location: https://github.com/haskell-wasm/xml.git
+    tag: bc793dc9bc29c92245d3482a54d326abd3ae1403
+    subdir: xml-conduit
+
   -- https://github.com/haskell/network/pull/598
   source-repository-package
     type: git
