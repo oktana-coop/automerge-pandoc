@@ -46,9 +46,6 @@ executables:
   automerge-pandoc:
     main: Main.hs
     source-dirs: app
-    ghc-options:
-      - -rtsopts
-      - -with-rtsopts=-N
     dependencies:
       - automerge-pandoc
       - bytestring >= 0.12.1.0
