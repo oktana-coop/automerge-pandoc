@@ -51,7 +51,7 @@ executables:
       - bytestring >= 0.12.1.0
       - raw-strings-qq >= 1.1
       - text >= 2.1.1
-      - pandoc >= 3.6.2
+      - pandoc >= 3.5
       - pandoc-types >= 1.23.1
       - optparse-applicative >= 0.18.1.0
 
