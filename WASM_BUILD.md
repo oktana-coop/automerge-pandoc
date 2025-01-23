@@ -32,3 +32,7 @@ wasmtime automerge-pandoc.wasm fromAutomerge --to pandoc AUTOMERGE_SPANS_JSON
 ## More Resources
 
 Haskell's [official docs](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html) for WebAssembly were the starting point of this implementation and are a useful resource.
+
+## Challenges
+
+The produced `automerge-pandoc.wasm` artifact is pretty big (~70-80 MB). Research needs to be done in order to reduce its size.
