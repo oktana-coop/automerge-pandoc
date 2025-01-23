@@ -28,3 +28,7 @@ wasmtime automerge-pandoc.wasm fromAutomerge --to pandoc AUTOMERGE_SPANS_JSON
 - The overrides in `cabal.project.wasm-wasi` are based mostly on https://github.com/haskell-wasm/pandoc/blob/wasm/cabal.project, which is a Pandoc build for wasm.
 - Pandoc was downgraded to version `3.5` because this was the version that was working with the wasm build at the time of the initial implementation.
 - [haskell-wasm](https://github.com/orgs/haskell-wasm/repositories) GitHub repositories is probably the best resource for packages that will work for WASM & WASI.
+
+## More Resources
+
+Haskell's [official docs](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html) for WebAssembly were the starting point of this implementation and are a useful resource.
