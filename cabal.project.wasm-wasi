@@ -1,3 +1,5 @@
+packages: .
+
 if arch(wasm32)
   -- Required for TemplateHaskell. When using wasm32-wasi-cabal from
   -- ghc-wasm-meta, this is superseded by the global cabal.config.
@@ -135,4 +137,4 @@ if arch(wasm32)
     type: git
     location: https://github.com/amesgen/splitmix
     tag: cea9e31bdd849eb0c17611bb99e33d590e126164
-  
+    

@@ -56,7 +56,7 @@ executable automerge-pandoc
     , base >=4.7 && <5
     , bytestring >=0.12.1.0
     , optparse-applicative >=0.18.1.0
-    , pandoc >=3.5
+    , pandoc >=3.6.2
     , pandoc-types >=1.23.1
     , raw-strings-qq >=1.1
     , text >=2.1.1
