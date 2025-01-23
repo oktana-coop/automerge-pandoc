@@ -61,3 +61,7 @@ stack exec automerge-pandoc toAutomerge -- --from markdown MARKDOWN_STRING
 ```
 stack exec automerge-pandoc toAutomerge -- --from html HTML_STRING
 ```
+
+## Build for WebAssembly
+
+There are instructions for building the project for [WebAssembly](https://webassembly.org/) [here](https://github.com/arisgk/automerge-pandoc/blob/main/WASM_BUILD.md).
