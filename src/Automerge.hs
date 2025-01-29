@@ -2,7 +2,7 @@
 
 module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), TextSpan (..), Mark (..), toJSONText) where
 
-import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool), eitherDecode, encode, object, withObject, withScientific, (.!=), (.:), (.:?), (.=))
+import Data.Aeson (FromJSON (parseJSON), Object (..), ToJSON (toJSON), Value (Bool), eitherDecode, encode, object, withObject, withScientific, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types (Parser)
@@ -15,7 +15,7 @@ import Data.Text.Encoding (decodeUtf8)
 data Mark
   = Strong
   | Emphasis
-  | Link
+  | Link {url :: T.Text, title :: T.Text}
   deriving (Show, Eq)
 
 -- TODO: Constrain to levels 1-6
@@ -85,15 +85,28 @@ parseInline v = do
   let parsedMarks = parseMarks marksKeyMap
   pure $ TextSpan $ AutomergeText parsedValue parsedMarks
 
-parseMarks :: KM.KeyMap Value -> [Mark]
-parseMarks = mapMaybe parseMark . KM.toList
-  where
-    parseMark (k, Bool True) = case K.toText k of
-      "strong" -> Just Strong
-      "em" -> Just Emphasis
-      "link" -> Just Link
-      _ -> Nothing
-    parseMark _ = Nothing
+parseMarks :: KM.KeyMap Value -> Parser [Mark]
+parseMarks = mapM parseMark . KM.toList
+
+parseMark :: (K.Key, Value) -> Parser Mark
+parseMark (k, Object o)
+  | K.toText == "link" = parseLink o
+parseMark (k, Bool True) = case K.toText k of
+  "strong" -> Just Strong
+  "em" -> Just Emphasis
+  _ -> fail $ "Unexpected mark with boolean value: " ++ T.unpack (K.toText k)
+parseMark _ = fail "Invalid format in marks"
+
+parseNonEmpty :: String -> T.Text -> Parser T.Text
+parseNonEmpty fieldName txt
+  | T.null txt = fail $ fieldname ++ " must be non-empty"
+  | otherwise = pure txt
+
+parseLink :: Object -> Parser Mark
+parseLink v = do
+  url <- v .: "href" >>= parseNonEmpty "href"
+  title <- v .: "title" >>= parseNonEmpty "title"
+  pure $ Link {url = url, title = title}
 
 parseAutomergeSpans :: BL.ByteString -> Either String [AutomergeSpan]
 parseAutomergeSpans = eitherDecode
@@ -187,7 +200,7 @@ instance ToJSON AutomergeSpan where
       markToKeyVal mark = case mark of
         Strong -> (K.fromText "strong", Bool True)
         Emphasis -> (K.fromText "em", Bool True)
-        Link -> (K.fromText "link", Bool True)
+        Link linkUrl linkTitle -> (K.fromText "link", object ["href" .= linkUrl, "title" .= linkTitle])
 
 toJSONText :: [AutomergeSpan] -> T.Text
 toJSONText = decodeUtf8 . BSL8.toStrict . encode
