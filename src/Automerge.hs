@@ -2,23 +2,23 @@
 
 module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), TextSpan (..), Mark (..), toJSONText) where
 
-import Data.Aeson (FromJSON (parseJSON), Object (..), ToJSON (toJSON), Value (Bool), eitherDecode, encode, object, withObject, withScientific, (.!=), (.:), (.:?), (.=))
+import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, Object), eitherDecode, encode, object, withObject, withScientific, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BSL8
-import Data.Maybe (mapMaybe)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
+
+data Link = Link {url :: T.Text, title :: T.Text} deriving (Show, Eq)
 
 data Mark
   = Strong
   | Emphasis
-  | Link {url :: T.Text, title :: T.Text}
+  | LinkMark Link
   deriving (Show, Eq)
 
--- TODO: Constrain to levels 1-6
 newtype HeadingLevel = HeadingLevel Int deriving (Show)
 
 instance FromJSON HeadingLevel where
@@ -82,7 +82,7 @@ parseInline :: Object -> Parser AutomergeSpan
 parseInline v = do
   parsedValue <- v .: "value"
   marksKeyMap <- v .:? "marks" .!= KM.empty
-  let parsedMarks = parseMarks marksKeyMap
+  parsedMarks <- parseMarks marksKeyMap
   pure $ TextSpan $ AutomergeText parsedValue parsedMarks
 
 parseMarks :: KM.KeyMap Value -> Parser [Mark]
@@ -90,23 +90,23 @@ parseMarks = mapM parseMark . KM.toList
 
 parseMark :: (K.Key, Value) -> Parser Mark
 parseMark (k, Object o)
-  | K.toText == "link" = parseLink o
+  | K.toText k == "link" = parseLink o
 parseMark (k, Bool True) = case K.toText k of
-  "strong" -> Just Strong
-  "em" -> Just Emphasis
+  "strong" -> pure Strong
+  "em" -> pure Emphasis
   _ -> fail $ "Unexpected mark with boolean value: " ++ T.unpack (K.toText k)
 parseMark _ = fail "Invalid format in marks"
 
 parseNonEmpty :: String -> T.Text -> Parser T.Text
 parseNonEmpty fieldName txt
-  | T.null txt = fail $ fieldname ++ " must be non-empty"
+  | T.null txt = fail $ fieldName ++ " must be non-empty"
   | otherwise = pure txt
 
 parseLink :: Object -> Parser Mark
 parseLink v = do
-  url <- v .: "href" >>= parseNonEmpty "href"
-  title <- v .: "title" >>= parseNonEmpty "title"
-  pure $ Link {url = url, title = title}
+  parsedUrl <- v .: "href" >>= parseNonEmpty "href"
+  parsedTitle <- v .: "title" >>= parseNonEmpty "title"
+  pure $ LinkMark Link {url = parsedUrl, title = parsedTitle}
 
 parseAutomergeSpans :: BL.ByteString -> Either String [AutomergeSpan]
 parseAutomergeSpans = eitherDecode
@@ -200,7 +200,7 @@ instance ToJSON AutomergeSpan where
       markToKeyVal mark = case mark of
         Strong -> (K.fromText "strong", Bool True)
         Emphasis -> (K.fromText "em", Bool True)
-        Link linkUrl linkTitle -> (K.fromText "link", object ["href" .= linkUrl, "title" .= linkTitle])
+        LinkMark link -> (K.fromText "link", object ["href" .= url link, "title" .= title link])
 
 toJSONText :: [AutomergeSpan] -> T.Text
 toJSONText = decodeUtf8 . BSL8.toStrict . encode
