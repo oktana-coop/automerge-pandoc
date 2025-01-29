@@ -1,10 +1,9 @@
 module PandocReader (toPandoc) where
 
-import Automerge (AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), Mark (..), TextSpan (..))
-import Data.Foldable (foldl') -- Import foldl' from Data.Foldable
+import Automerge (AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), TextSpan (..))
 import Data.Sequence as Seq (Seq (Empty))
 import qualified Data.Text as T
-import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlock, codeBlockWith, doc, emph, fromList, header, headerWith, para, str, strong)
+import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlock, codeBlockWith, doc, emph, fromList, header, headerWith, link, para, str, strong)
 import Text.Pandoc.Class
 import Text.Pandoc.Definition
 import Utils (lastValue, withoutLast)
@@ -56,4 +55,4 @@ markToInlines :: Mark -> Inlines -> Inlines
 markToInlines mark = case mark of
   Automerge.Strong -> strong
   Automerge.Emphasis -> emph
-  _ -> undefined -- TODO: Handle link
+  Automerge.LinkMark automergeLink -> link (url automergeLink) (title automergeLink)

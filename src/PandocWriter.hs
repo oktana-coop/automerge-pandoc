@@ -1,6 +1,6 @@
 module PandocWriter (writeAutomergeSpans) where
 
-import Automerge (AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), Mark (..), TextSpan (..), toJSONText)
+import Automerge (AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), TextSpan (..), toJSONText)
 import qualified Data.Text as T
 import Text.Pandoc (WriterOptions)
 import Text.Pandoc.Class (PandocMonad)
@@ -44,6 +44,7 @@ inlineToTextSpan inline = case inline of
   Space -> [AutomergeText (T.pack " ") []]
   Text.Pandoc.Definition.Strong inlines -> addMark Automerge.Strong inlines
   Text.Pandoc.Definition.Emph inlines -> addMark Automerge.Emphasis inlines
+  Text.Pandoc.Definition.Link _ inlines (linkUrl, linkTitle) -> addMark (Automerge.LinkMark $ Automerge.Link {url = linkUrl, title = linkTitle}) inlines
   -- TODO: Handle other inline elements
   _ -> []
 
