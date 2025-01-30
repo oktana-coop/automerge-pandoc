@@ -6,7 +6,7 @@ import qualified Data.Text as T
 import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlock, codeBlockWith, doc, emph, fromList, header, headerWith, link, para, str, strong)
 import Text.Pandoc.Class
 import Text.Pandoc.Definition
-import Utils (lastValue, withoutLast)
+import Utils.Sequence (lastValue, withoutLast)
 
 toPandoc :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc
 toPandoc spans = pure . doc $ convertAutomergeSpans spans

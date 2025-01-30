@@ -9,7 +9,8 @@ import Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Data.Text.Encoding (decodeUtf8)
+import Utils.JSON (parseNonEmpty, parseStringifiedObject, stringifyObject)
 
 data Link = Link {url :: T.Text, title :: T.Text} deriving (Show, Eq)
 
@@ -99,22 +100,12 @@ parseMarks = mapM parseMark . KM.toList
 
 parseMark :: (K.Key, Value) -> Parser Mark
 parseMark (k, String txt)
-  | K.toText k == "link" = parseSerializedObject txt >>= (pure . LinkMark)
+  | K.toText k == "link" = parseStringifiedObject txt >>= (pure . LinkMark)
 parseMark (k, Bool True) = case K.toText k of
   "strong" -> pure Strong
   "em" -> pure Emphasis
   _ -> fail $ "Unexpected mark with boolean value: " ++ T.unpack (K.toText k)
 parseMark _ = fail "Invalid format in marks"
-
-parseSerializedObject :: (FromJSON a) => T.Text -> Parser a
-parseSerializedObject txt = case eitherDecode $ BSL8.fromStrict $ encodeUtf8 txt of
-  Left err -> fail $ "Failed to decode serialized object " ++ err
-  Right val -> pure val
-
-parseNonEmpty :: String -> T.Text -> Parser T.Text
-parseNonEmpty fieldName txt
-  | T.null txt = fail $ fieldName ++ " must be non-empty"
-  | otherwise = pure txt
 
 parseAutomergeSpans :: BL.ByteString -> Either String [AutomergeSpan]
 parseAutomergeSpans = eitherDecode
@@ -209,9 +200,6 @@ instance ToJSON AutomergeSpan where
         Strong -> (K.fromText "strong", Bool True)
         Emphasis -> (K.fromText "em", Bool True)
         LinkMark link -> (K.fromText "link", String $ stringifyObject link)
-
-stringifyObject :: (ToJSON a) => a -> T.Text
-stringifyObject = T.pack . BSL8.unpack . encode
 
 toJSONText :: [AutomergeSpan] -> T.Text
 toJSONText = decodeUtf8 . BSL8.toStrict . encode

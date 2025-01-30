@@ -1,4 +1,4 @@
-module Utils (lastValue, withoutLast) where
+module Utils.Sequence (lastValue, withoutLast) where
 
 import Data.Sequence as Seq (length, lookup, null, take)
 import Text.Pandoc.Builder (Many (Many, unMany))

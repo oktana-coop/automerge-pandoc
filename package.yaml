@@ -41,6 +41,9 @@ library:
     - pandoc >= 3.5
     - pandoc-types >= 1.23.1
     - containers >= 0.7
+  other-modules:
+    - Utils.JSON
+    - Utils.Sequence
 
 executables:
   automerge-pandoc:
