@@ -15,7 +15,7 @@ convertAutomergeSpans :: [AutomergeSpan] -> Blocks
 convertAutomergeSpans = foldl' convertAutomergeSpan (Many Seq.Empty)
 
 convertAutomergeSpan :: Blocks -> AutomergeSpan -> Blocks
-convertAutomergeSpan acc (BlockSpan blockSpan) = acc <> convertBlockSpan blockSpan
+convertAutomergeSpan acc (BlockSpan blockSpan _) = acc <> convertBlockSpan blockSpan
 convertAutomergeSpan acc (TextSpan textSpan) = case lastValue acc of
   Nothing -> acc <> convertAndWrapToParagraph textSpan
   Just block -> withoutLast acc <> convertAndAddTo block textSpan
