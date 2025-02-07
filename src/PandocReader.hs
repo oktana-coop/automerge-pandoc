@@ -1,19 +1,26 @@
 module PandocReader (toPandoc) where
 
-import Automerge (AutomergeSpan (..), BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), TextSpan (..), isParent, takeUntilBlockSpan)
+import Automerge (AutomergeSpan (..), BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), TextSpan (..), isParent, isSiblingListItem, isTopLevelBlock, takeUntilBlockSpan)
 import Data.Sequence as Seq (Seq (Empty))
 import qualified Data.Text as T
-import Data.Tree (Tree, unfoldTree)
+import Data.Tree (Tree (Node), unfoldForest)
 import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlockWith, doc, emph, fromList, headerWith, link, para, str, strong)
 import Text.Pandoc.Class
 import Text.Pandoc.Definition
 import Utils.Sequence (lastValue, withoutLast)
 
-data DocNode = BlockNode Block | InlineNode Inlines
+data DocNode = Root | BlockNode Block | InlineNode Inlines
 
 buildTree :: [AutomergeSpan] -> Maybe (Tree DocNode)
 buildTree [] = Nothing
-buildTree (currentSpan : restSpans) = Just $ unfoldTree buildDocNode (currentSpan, restSpans)
+-- TODO: This is probably wrong, we probably want to start with something like Root, not the first item.
+buildTree spans = Just $ Node Root $ unfoldForest buildDocNode $ getRootSeeds spans
+
+getRootSeeds :: [AutomergeSpan] -> [(AutomergeSpan, [AutomergeSpan])]
+getRootSeeds [] = []
+getRootSeeds (x : xs) = case x of
+  BlockSpan currentSpan | (isTopLevelBlock currentSpan) -> (BlockSpan currentSpan, xs) : getRootSeeds xs
+  _ -> getRootSeeds xs
 
 buildDocNode :: (AutomergeSpan, [AutomergeSpan]) -> (DocNode, [(AutomergeSpan, [AutomergeSpan])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
@@ -26,13 +33,13 @@ getChildSeeds blockSpan = (addChildlessSeed . takeUntilBlockSpan) <> (findChildB
     addChildlessSeed = map (\x -> (x, []))
 
 findChildBlocksWithRemainder :: BlockSpan -> [AutomergeSpan] -> [(AutomergeSpan, [AutomergeSpan])]
-findChildBlocksWithRemainder blockSpan spans = addChildBlocks spans
+findChildBlocksWithRemainder blockSpan = addChildBlocks
   where
     addChildBlocks [] = []
     addChildBlocks (x : xs) = case x of
       -- If a child span is encountered, add it to the list (along with the remainder)
       -- using the cons operator and continue with the recursion
-      BlockSpan b | isParent blockSpan b -> (BlockSpan b, xs) : addChildBlocks xs
+      BlockSpan currentSpan | (isParent blockSpan currentSpan || isSiblingListItem blockSpan currentSpan) -> (BlockSpan currentSpan, xs) : addChildBlocks xs
       _ -> addChildBlocks xs
 
 toPandoc :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc

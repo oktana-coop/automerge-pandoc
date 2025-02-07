@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), BlockSpan (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, isParent) where
+module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), BlockSpan (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, isTopLevelBlock, isParent, isSiblingListItem) where
 
 import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, String), eitherDecode, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
@@ -246,8 +246,16 @@ takeUntilBlockSpan (x : xs) = case x of
   BlockSpan _ -> []
   _ -> x : takeUntilBlockSpan xs
 
+isTopLevelBlock :: BlockSpan -> Bool
+isTopLevelBlock (AutomergeBlock _ parents) = null parents
+
 isParent :: BlockSpan -> BlockSpan -> Bool
 isParent (AutomergeBlock _ parents) (AutomergeBlock _ candidateParents) = isProperPrefix parents candidateParents
+
+isSiblingListItem :: BlockSpan -> BlockSpan -> Bool
+isSiblingListItem (AutomergeBlock UnorderedListItemMarker parents) (AutomergeBlock UnorderedListItemMarker candidateParents) = parents == candidateParents
+isSiblingListItem (AutomergeBlock OrderedListItemMarker parents) (AutomergeBlock OrderedListItemMarker candidateParents) = parents == candidateParents
+isSiblingListItem (AutomergeBlock _ _) (AutomergeBlock _ _) = False
 
 isProperPrefix :: [BlockType] -> [BlockType] -> Bool
 isProperPrefix _ [] = False
