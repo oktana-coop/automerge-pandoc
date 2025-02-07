@@ -21,7 +21,9 @@ buildDocNode (currentSpan, remainingSpans) = case currentSpan of
   (TextSpan textSpan) -> (InlineNode $ convertTextSpan textSpan, [])
 
 getChildSeeds :: BlockSpan -> [AutomergeSpan] -> [(AutomergeSpan, [AutomergeSpan])]
-getChildSeeds blockSpan = (map (\x -> (x, [])) . takeUntilBlockSpan) <> (findChildBlocksWithRemainder blockSpan)
+getChildSeeds blockSpan = (addSeedWithNoChildren . takeUntilBlockSpan) <> (findChildBlocksWithRemainder blockSpan)
+  where
+    addSeedWithNoChildren = map (\x -> (x, []))
 
 findChildBlocksWithRemainder :: BlockSpan -> [AutomergeSpan] -> [(AutomergeSpan, [AutomergeSpan])]
 findChildBlocksWithRemainder blockSpan spans = addChildBlocks spans
