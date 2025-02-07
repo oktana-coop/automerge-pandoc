@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), TextSpan (..), Mark (..), Link (..), toJSONText) where
+module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), BlockSpan (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, isParent) where
 
 import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, String), eitherDecode, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
@@ -92,10 +92,12 @@ instance Semigroup TextSpan where
 instance Monoid TextSpan where
   mempty = AutomergeText T.empty []
 
+data BlockSpan = AutomergeBlock BlockMarker [BlockType] deriving (Show, Eq)
+
 data AutomergeSpan
-  = BlockSpan BlockMarker [BlockType]
+  = BlockSpan BlockSpan
   | TextSpan TextSpan
-  deriving (Show)
+  deriving (Show, Eq)
 
 instance FromJSON AutomergeSpan where
   parseJSON = withObject "AutomergeSpan" $ \v -> do
@@ -111,16 +113,16 @@ parseBlock v = do
   blockType <- (blockData .: "type" :: Parser BlockType)
   parents <- (blockData .: "parents" :: Parser [BlockType])
   case blockType of
-    ParagraphType -> pure $ BlockSpan ParagraphMarker parents
+    ParagraphType -> pure $ BlockSpan $ AutomergeBlock ParagraphMarker parents
     HeadingType -> do
       attrs <- blockData .: "attrs"
       level <- attrs .: "level"
-      pure $ BlockSpan (HeadingMarker $ Heading $ HeadingLevel level) parents
-    CodeBlockType -> pure $ BlockSpan CodeBlockMarker parents
-    BlockQuoteType -> pure $ BlockSpan BlockQuoteMarker parents
-    OrderedListItemType -> pure $ BlockSpan OrderedListItemMarker parents
-    UnorderedListItemType -> pure $ BlockSpan UnorderedListItemMarker parents
-    ImageType -> pure $ BlockSpan ImageBlockMarker parents
+      pure $ BlockSpan $ AutomergeBlock (HeadingMarker $ Heading $ HeadingLevel level) parents
+    CodeBlockType -> pure $ BlockSpan $ AutomergeBlock CodeBlockMarker parents
+    BlockQuoteType -> pure $ BlockSpan $ AutomergeBlock BlockQuoteMarker parents
+    OrderedListItemType -> pure $ BlockSpan $ AutomergeBlock OrderedListItemMarker parents
+    UnorderedListItemType -> pure $ BlockSpan $ AutomergeBlock UnorderedListItemMarker parents
+    ImageType -> pure $ BlockSpan $ AutomergeBlock ImageBlockMarker parents
 
 parseInline :: Object -> Parser AutomergeSpan
 parseInline v = do
@@ -145,7 +147,7 @@ parseAutomergeSpans :: BL.ByteString -> Either String [AutomergeSpan]
 parseAutomergeSpans = eitherDecode
 
 instance ToJSON AutomergeSpan where
-  toJSON (BlockSpan blockMarker parents) = case blockMarker of
+  toJSON (BlockSpan (AutomergeBlock blockMarker parents)) = case blockMarker of
     ParagraphMarker ->
       object
         [ "type" .= T.pack "block",
@@ -237,3 +239,16 @@ instance ToJSON AutomergeSpan where
 
 toJSONText :: [AutomergeSpan] -> T.Text
 toJSONText = decodeUtf8 . BSL8.toStrict . encode
+
+takeUntilBlockSpan :: [AutomergeSpan] -> [AutomergeSpan]
+takeUntilBlockSpan [] = []
+takeUntilBlockSpan (x : xs) = case x of
+  BlockSpan _ -> []
+  _ -> x : takeUntilBlockSpan xs
+
+isParent :: BlockSpan -> BlockSpan -> Bool
+isParent (AutomergeBlock _ parents) (AutomergeBlock _ candidateParents) = isProperPrefix parents candidateParents
+
+isProperPrefix :: [BlockType] -> [BlockType] -> Bool
+isProperPrefix _ [] = False
+isProperPrefix parents potentialChildParents = parents == (init potentialChildParents)

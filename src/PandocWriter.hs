@@ -1,6 +1,6 @@
 module PandocWriter (writeAutomergeSpans) where
 
-import Automerge (AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), TextSpan (..), toJSONText)
+import Automerge (AutomergeSpan (..), BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), TextSpan (..), toJSONText)
 import qualified Data.Text as T
 import Text.Pandoc (WriterOptions)
 import Text.Pandoc.Class (PandocMonad)
@@ -15,9 +15,9 @@ blocksToAutomergeSpans = concatMap blockToAutomergeSpans
 
 blockToAutomergeSpans :: Block -> [AutomergeSpan]
 blockToAutomergeSpans block = case block of
-  Para inlines -> BlockSpan ParagraphMarker [] : (TextSpan <$> inlinesToAutomergeTextSpans inlines)
-  Header level _ inlines -> BlockSpan (HeadingMarker $ Heading $ HeadingLevel level) [] : (TextSpan <$> inlinesToAutomergeTextSpans inlines)
-  CodeBlock _ text -> [BlockSpan CodeBlockMarker [], TextSpan $ AutomergeText text []]
+  Para inlines -> (BlockSpan $ AutomergeBlock ParagraphMarker []) : (TextSpan <$> inlinesToAutomergeTextSpans inlines)
+  Header level _ inlines -> (BlockSpan $ AutomergeBlock (HeadingMarker $ Heading $ HeadingLevel level) []) : (TextSpan <$> inlinesToAutomergeTextSpans inlines)
+  CodeBlock _ text -> [BlockSpan $ AutomergeBlock CodeBlockMarker [], TextSpan $ AutomergeText text []]
   -- TODO: Implement blockquote, which contains a list of blocks in Pandoc
   _ -> [] -- Ignore blocks we don't recognize. TODO: Implement something more sophisticated here.
 
