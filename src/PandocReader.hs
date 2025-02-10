@@ -1,20 +1,59 @@
 module PandocReader (toPandoc) where
 
 import Automerge (AutomergeSpan (..), BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), TextSpan (..), isParent, isSiblingListItem, isTopLevelBlock, takeUntilBlockSpan)
+import Data.List (find, groupBy)
 import Data.Sequence as Seq (Seq (Empty))
 import qualified Data.Text as T
-import Data.Tree (Tree (Node), unfoldForest)
+import Data.Tree (Tree (Node), foldTree, rootLabel, unfoldForest)
 import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlockWith, doc, emph, fromList, headerWith, link, para, str, strong)
 import Text.Pandoc.Class
 import Text.Pandoc.Definition
 import Utils.Sequence (lastValue, withoutLast)
 
-data DocNode = Root | BlockNode Block | InlineNode Inlines
+data ListItem = Item [Block]
+
+data BlockNode = PandocBlock Block | BulletListItem ListItem | OrderedListItem ListItem
+
+data DocNode = Root | BlockNode BlockNode | InlineNode Inlines
 
 buildTree :: [AutomergeSpan] -> Maybe (Tree DocNode)
 buildTree [] = Nothing
--- TODO: This is probably wrong, we probably want to start with something like Root, not the first item.
-buildTree spans = Just $ Node Root $ unfoldForest buildDocNode $ getRootSeeds spans
+buildTree spans = Just $ groupListItems $ buildRawTree spans
+
+groupListItems :: Tree DocNode -> Tree DocNode
+groupListItems = foldTree addListNodes
+  where
+    addListNodes :: DocNode -> [Tree DocNode] -> Tree DocNode
+    addListNodes node subtrees = case node of
+      Root -> Node Root $ groupAdjacentListItems subtrees
+      BlockNode _ -> Node node $ groupAdjacentListItems subtrees
+      InlineNode _ -> Node node subtrees
+      where
+        groupAdjacentListItems :: [Tree DocNode] -> [Tree DocNode]
+        groupAdjacentListItems = concat . map nestListItemGroupsUnderList . groupBy isAdjacentListItemNode
+          where
+            isAdjacentListItemNode :: Tree DocNode -> Tree DocNode -> Bool
+            isAdjacentListItemNode (Node (BlockNode (BulletListItem _)) _) (Node (BlockNode (BulletListItem _)) _) = True
+            isAdjacentListItemNode (Node (BlockNode (OrderedListItem _)) _) (Node (BlockNode (OrderedListItem _)) _) = True
+            isAdjacentListItemNode _ _ = False
+
+            nestListItemGroupsUnderList :: [Tree DocNode] -> [Tree DocNode]
+            nestListItemGroupsUnderList group = case (find listItemInGroup group) of
+              Nothing -> group
+              Just item -> case item of
+                -- add bullet list node
+                (Node (BlockNode (BulletListItem _)) _) -> [Node (BlockNode $ PandocBlock $ BulletList []) group]
+                -- add ordered list node
+                (Node (BlockNode (OrderedListItem _)) _) -> [Node (BlockNode $ PandocBlock $ OrderedList (1, DefaultStyle, DefaultDelim) []) group]
+                _ -> group
+              where
+                listItemInGroup :: Tree DocNode -> Bool
+                listItemInGroup (Node (BlockNode (BulletListItem _)) _) = True
+                listItemInGroup (Node (BlockNode (OrderedListItem _)) _) = True
+                listItemInGroup _ = False
+
+buildRawTree :: [AutomergeSpan] -> Tree DocNode
+buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getRootSeeds spans
 
 getRootSeeds :: [AutomergeSpan] -> [(AutomergeSpan, [AutomergeSpan])]
 getRootSeeds [] = []
@@ -24,7 +63,7 @@ getRootSeeds (x : xs) = case x of
 
 buildDocNode :: (AutomergeSpan, [AutomergeSpan]) -> (DocNode, [(AutomergeSpan, [AutomergeSpan])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
-  (BlockSpan blockSpan@(AutomergeBlock blockMarker _)) -> (BlockNode $ convertBlockMarker blockMarker, getChildSeeds blockSpan remainingSpans)
+  (BlockSpan blockSpan@(AutomergeBlock blockMarker _)) -> (BlockNode $ buildBlockNode blockMarker, getChildSeeds blockSpan remainingSpans)
   (TextSpan textSpan) -> (InlineNode $ convertTextSpan textSpan, [])
 
 getChildSeeds :: BlockSpan -> [AutomergeSpan] -> [(AutomergeSpan, [AutomergeSpan])]
@@ -39,8 +78,17 @@ findChildBlocksWithRemainder blockSpan = addChildBlocks
     addChildBlocks (x : xs) = case x of
       -- If a child span is encountered, add it to the list (along with the remainder)
       -- using the cons operator and continue with the recursion
-      BlockSpan currentSpan | (isParent blockSpan currentSpan || isSiblingListItem blockSpan currentSpan) -> (BlockSpan currentSpan, xs) : addChildBlocks xs
+      BlockSpan currentSpan | isParent blockSpan currentSpan -> (BlockSpan currentSpan, xs) : addChildBlocks xs
       _ -> addChildBlocks xs
+
+buildBlockNode :: BlockMarker -> BlockNode
+buildBlockNode blockMarker = case blockMarker of
+  ParagraphMarker -> PandocBlock $ Para []
+  HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Header level nullAttr []
+  CodeBlockMarker -> PandocBlock $ CodeBlock nullAttr T.empty
+  UnorderedListItemMarker -> BulletListItem $ Item []
+  OrderedListItemMarker -> OrderedListItem $ Item []
+  _ -> undefined -- more blocks to be implemented
 
 toPandoc :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc
 toPandoc spans = pure . doc $ convertAutomergeSpans spans
