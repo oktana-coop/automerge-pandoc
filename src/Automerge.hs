@@ -249,8 +249,9 @@ takeUntilBlockSpan (x : xs) = case x of
 isTopLevelBlock :: BlockSpan -> Bool
 isTopLevelBlock (AutomergeBlock _ parents) = null parents
 
-isParent :: BlockSpan -> BlockSpan -> Bool
-isParent (AutomergeBlock _ parents) (AutomergeBlock _ candidateParents) = isProperPrefix parents candidateParents
+isParent :: Maybe BlockSpan -> BlockSpan -> Bool
+isParent (Just (AutomergeBlock _ parents)) (AutomergeBlock _ candidateParents) = isProperPrefix parents candidateParents
+isParent Nothing blockSpan = isTopLevelBlock blockSpan
 
 isSiblingListItem :: BlockSpan -> BlockSpan -> Bool
 isSiblingListItem (AutomergeBlock UnorderedListItemMarker parents) (AutomergeBlock UnorderedListItemMarker candidateParents) = parents == candidateParents
