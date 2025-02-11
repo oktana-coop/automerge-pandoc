@@ -1,7 +1,15 @@
-module Utils.Sequence (lastValue, withoutLast) where
+module Utils.Sequence (firstValue, lastValue, withoutLast) where
 
-import Data.Sequence as Seq (length, lookup, null, take)
+import Data.Sequence as Seq (ViewL (EmptyL, (:<)), length, lookup, null, take, viewl)
 import Text.Pandoc.Builder (Many (Many, unMany))
+
+-- Gets the first value of a sequence wrapped in Many
+firstValue :: Many a -> Maybe a
+firstValue many = case Seq.viewl xs of
+  Seq.EmptyL -> Nothing
+  x Seq.:< _ -> Just x
+  where
+    xs = unMany many
 
 -- Gets the last value of a sequence wrapped in Many
 lastValue :: Many a -> Maybe a

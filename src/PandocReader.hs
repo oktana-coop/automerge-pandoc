@@ -8,10 +8,10 @@ import Data.Sequence as Seq (Seq (Empty))
 import qualified Data.Text as T
 import Data.Tree (Tree (Node), foldTree, unfoldForest)
 import Text.Pandoc (PandocError (PandocSyntaxMapError))
-import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlockWith, doc, emph, fromList, headerWith, link, para, str, strong)
+import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlockWith, doc, emph, fromList, headerWith, link, para, str, strong, toList)
 import Text.Pandoc.Class
 import Text.Pandoc.Definition
-import Utils.Sequence (lastValue, withoutLast)
+import Utils.Sequence (firstValue, lastValue, withoutLast)
 
 data ListItem = Item [Block]
 
@@ -99,16 +99,40 @@ treeToPandocBlocks tree = sequenceA (foldTree treeNodeToPandocBlock tree) >>= ge
 getBlockSeq :: [BlockOrInlines] -> Either PandocError Blocks
 getBlockSeq = undefined
 
+data BlockOrInlines = BlockElement Block | InlineElement Inlines
+
 assertBlock :: BlockOrInlines -> Either PandocError Block
 assertBlock (BlockElement block) = Right block
 assertBlock (InlineElement _) = Left $ PandocSyntaxMapError $ T.pack "Error in mapping: found orphan inline node"
 
-data BlockOrInlines = BlockElement Block | InlineElement Inlines
+assertInlines :: BlockOrInlines -> Either PandocError Inlines
+assertInlines (BlockElement _) = Left $ PandocSyntaxMapError $ T.pack "Error in mapping: found block node in inline node slot"
+assertInlines (InlineElement inlines) = Right $ inlines
 
 treeNodeToPandocBlock :: DocNode -> [[Either PandocError BlockOrInlines]] -> [Either PandocError BlockOrInlines]
-treeNodeToPandocBlock node childrenBlocks = case node of
-  (BlockNode (PandocBlock block@(Para _))) -> undefined
-  _ -> undefined
+treeNodeToPandocBlock node childrenNodes = case node of
+  Root -> concat childrenNodes
+  (BlockNode (PandocBlock (Para _))) -> case concatChildrenInlines childrenNodes of
+    Left err -> [Left err]
+    Right inlines -> [Right $ BlockElement $ Para $ toList inlines]
+  (BlockNode (PandocBlock (Header level attr _))) -> case concatChildrenInlines childrenNodes of
+    Left err -> [Left err]
+    Right inlines -> [Right $ BlockElement $ Header level attr $ toList inlines]
+  (BlockNode (PandocBlock (CodeBlock attr _))) -> case concatChildrenInlines childrenNodes of
+    Left err -> [Left err]
+    Right inlines -> case firstInline inlines of
+      Just (Str text) -> [Right $ BlockElement $ CodeBlock attr text]
+      _ -> [Left $ PandocSyntaxMapError $ T.pack "Error in mapping: Could not extract code block text"]
+  (InlineNode inlines) -> [Right $ InlineElement inlines]
+  where
+    concatChildrenInlines :: [[Either PandocError BlockOrInlines]] -> Either PandocError Inlines
+    concatChildrenInlines children = concatInlines $ map (>>= assertInlines) $ concat children
+      where
+        concatInlines :: [Either PandocError Inlines] -> Either PandocError Inlines
+        concatInlines eitherInlines = fmap mconcat (sequenceA eitherInlines)
+
+    firstInline :: Inlines -> Maybe Inline
+    firstInline = firstValue
 
 toPandoc'' :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc
 toPandoc'' spans = pure . doc $ convertAutomergeSpans spans
