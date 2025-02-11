@@ -125,8 +125,8 @@ treeNodeToPandocBlock node childrenNodes = case node of
     Right inlines -> case firstInline inlines of
       Just (Str text) -> [Right $ BlockElement $ CodeBlock attr text]
       _ -> [Left $ PandocSyntaxMapError $ T.pack "Error in mapping: Could not extract code block text"]
-  (BlockNode (BulletListItem)) -> concat childrenNodes
-  (BlockNode (OrderedListItem)) -> concat childrenNodes
+  (BlockNode (BulletListItem)) -> wrapInlinesToPlain $ concat childrenNodes
+  (BlockNode (OrderedListItem)) -> wrapInlinesToPlain $ concat childrenNodes
   (BlockNode (PandocBlock (BulletList _))) -> case mapToChildBlocks childrenNodes of
     Left err -> [Left err]
     Right blocks -> [Right $ BlockElement $ BulletList blocks]
@@ -141,7 +141,14 @@ treeNodeToPandocBlock node childrenNodes = case node of
     concatChildrenInlines children = concatInlines $ map (>>= assertInlines) $ concat children
       where
         concatInlines :: [Either PandocError Inlines] -> Either PandocError Inlines
-        concatInlines eitherInlines = fmap mconcat (sequenceA eitherInlines)
+        concatInlines eitherInlines = fmap mconcat $ sequenceA eitherInlines
+
+    wrapInlinesToPlain :: [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
+    wrapInlinesToPlain eitherInlines = (fmap . fmap) wrapInlines eitherInlines
+      where
+        wrapInlines :: BlockOrInlines -> BlockOrInlines
+        wrapInlines (BlockElement block) = BlockElement block
+        wrapInlines (InlineElement inlines) = BlockElement $ Plain $ toList inlines
 
     mapToChildBlocks :: [[Either PandocError BlockOrInlines]] -> Either PandocError [[Block]]
     mapToChildBlocks children = (traverse . traverse) (>>= assertBlock) children
