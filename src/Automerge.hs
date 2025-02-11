@@ -9,6 +9,7 @@ import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BSL8
+import Data.List (unsnoc)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Utils.JSON (parseNonEmpty, parseStringifiedObject, stringifyObject)
@@ -93,6 +94,15 @@ instance Monoid TextSpan where
   mempty = AutomergeText T.empty []
 
 data BlockSpan = AutomergeBlock BlockMarker [BlockType] deriving (Show, Eq)
+
+blockType :: BlockSpan -> BlockType
+blockType (AutomergeBlock (ParagraphMarker) _) = ParagraphType
+blockType (AutomergeBlock (HeadingMarker _) _) = HeadingType
+blockType (AutomergeBlock (CodeBlockMarker) _) = CodeBlockType
+blockType (AutomergeBlock (BlockQuoteMarker) _) = BlockQuoteType
+blockType (AutomergeBlock (OrderedListItemMarker) _) = OrderedListItemType
+blockType (AutomergeBlock (UnorderedListItemMarker) _) = UnorderedListItemType
+blockType (AutomergeBlock (ImageBlockMarker) _) = ImageType
 
 data AutomergeSpan
   = BlockSpan BlockSpan
@@ -250,8 +260,13 @@ isTopLevelBlock :: BlockSpan -> Bool
 isTopLevelBlock (AutomergeBlock _ parents) = null parents
 
 isParent :: Maybe BlockSpan -> BlockSpan -> Bool
-isParent (Just (AutomergeBlock _ parents)) (AutomergeBlock _ candidateParents) = isProperPrefix parents candidateParents
+isParent (Just block@(AutomergeBlock _ parents)) (AutomergeBlock _ candidateParents) = candidateLastParentMatches (blockType block) candidateParents && isProperPrefix parents candidateParents
 isParent Nothing blockSpan = isTopLevelBlock blockSpan
+
+candidateLastParentMatches :: BlockType -> [BlockType] -> Bool
+candidateLastParentMatches parentBlockType potentialChildParents = case unsnoc potentialChildParents of
+  Nothing -> False
+  Just (_, lastParentOfCandidate) -> parentBlockType == lastParentOfCandidate
 
 isSiblingListItem :: BlockSpan -> BlockSpan -> Bool
 isSiblingListItem (AutomergeBlock UnorderedListItemMarker parents) (AutomergeBlock UnorderedListItemMarker candidateParents) = parents == candidateParents
