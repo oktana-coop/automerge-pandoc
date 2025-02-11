@@ -18,14 +18,12 @@ data BlockNode = PandocBlock Block | BulletListItem | OrderedListItem deriving (
 
 data DocNode = Root | BlockNode BlockNode | InlineNode Inlines deriving (Show)
 
-traceTree :: Maybe (Tree DocNode) -> Maybe (Tree DocNode)
-traceTree maybeTree = case maybeTree of
-  Nothing -> Nothing
-  Just tree -> Debug.Trace.trace (drawTree $ fmap show tree) Just tree
+traceTree :: Tree DocNode -> Tree DocNode
+traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
 
 buildTree :: [AutomergeSpan] -> Maybe (Tree DocNode)
 buildTree [] = Nothing
-buildTree spans = traceTree $ Just (groupListItems (buildRawTree spans))
+buildTree spans = fmap traceTree $ Just (groupListItems (buildRawTree spans))
 
 groupListItems :: Tree DocNode -> Tree DocNode
 groupListItems = foldTree addListNodes
