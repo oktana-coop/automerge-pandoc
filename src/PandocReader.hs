@@ -99,7 +99,7 @@ treeToPandocBlocks :: Tree DocNode -> Either PandocError Blocks
 treeToPandocBlocks tree = sequenceA (foldTree treeNodeToPandocBlock tree) >>= getBlockSeq
 
 getBlockSeq :: [BlockOrInlines] -> Either PandocError Blocks
-getBlockSeq = undefined
+getBlockSeq = fmap fromList . traverse assertBlock
 
 data BlockOrInlines = BlockElement Block | InlineElement Inlines
 
