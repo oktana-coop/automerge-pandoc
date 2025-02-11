@@ -6,20 +6,26 @@ import Data.List (find, groupBy)
 import Data.Maybe (fromMaybe)
 import Data.Sequence as Seq (Seq (Empty))
 import qualified Data.Text as T
-import Data.Tree (Tree (Node), foldTree, unfoldForest)
+import Data.Tree (Tree (Node), drawTree, foldTree, unfoldForest)
+import Debug.Trace
 import Text.Pandoc (PandocError (PandocSyntaxMapError))
 import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlockWith, doc, emph, fromList, headerWith, link, para, str, strong, toList)
 import Text.Pandoc.Class
 import Text.Pandoc.Definition
 import Utils.Sequence (firstValue, lastValue, withoutLast)
 
-data BlockNode = PandocBlock Block | BulletListItem | OrderedListItem
+data BlockNode = PandocBlock Block | BulletListItem | OrderedListItem deriving (Show)
 
-data DocNode = Root | BlockNode BlockNode | InlineNode Inlines
+data DocNode = Root | BlockNode BlockNode | InlineNode Inlines deriving (Show)
+
+traceTree :: Maybe (Tree DocNode) -> Maybe (Tree DocNode)
+traceTree maybeTree = case maybeTree of
+  Nothing -> Nothing
+  Just tree -> Debug.Trace.trace (drawTree $ fmap show tree) Just tree
 
 buildTree :: [AutomergeSpan] -> Maybe (Tree DocNode)
 buildTree [] = Nothing
-buildTree spans = Just $ groupListItems $ buildRawTree spans
+buildTree spans = traceTree $ Just (groupListItems (buildRawTree spans))
 
 groupListItems :: Tree DocNode -> Tree DocNode
 groupListItems = foldTree addListNodes
