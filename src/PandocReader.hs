@@ -13,9 +13,7 @@ import Text.Pandoc.Class
 import Text.Pandoc.Definition
 import Utils.Sequence (firstValue, lastValue, withoutLast)
 
-data ListItem = Item [Block]
-
-data BlockNode = PandocBlock Block | BulletListItem ListItem | OrderedListItem ListItem
+data BlockNode = PandocBlock Block | BulletListItem | OrderedListItem
 
 data DocNode = Root | BlockNode BlockNode | InlineNode Inlines
 
@@ -36,8 +34,8 @@ groupListItems = foldTree addListNodes
         groupAdjacentListItems = concat . map nestListItemGroupsUnderList . groupBy isAdjacentListItemNode
           where
             isAdjacentListItemNode :: Tree DocNode -> Tree DocNode -> Bool
-            isAdjacentListItemNode (Node (BlockNode (BulletListItem _)) _) (Node (BlockNode (BulletListItem _)) _) = True
-            isAdjacentListItemNode (Node (BlockNode (OrderedListItem _)) _) (Node (BlockNode (OrderedListItem _)) _) = True
+            isAdjacentListItemNode (Node (BlockNode (BulletListItem)) _) (Node (BlockNode (BulletListItem)) _) = True
+            isAdjacentListItemNode (Node (BlockNode (OrderedListItem)) _) (Node (BlockNode (OrderedListItem)) _) = True
             isAdjacentListItemNode _ _ = False
 
             nestListItemGroupsUnderList :: [Tree DocNode] -> [Tree DocNode]
@@ -45,14 +43,14 @@ groupListItems = foldTree addListNodes
               Nothing -> group
               Just item -> case item of
                 -- add bullet list node
-                (Node (BlockNode (BulletListItem _)) _) -> [Node (BlockNode $ PandocBlock $ BulletList []) group]
+                (Node (BlockNode (BulletListItem)) _) -> [Node (BlockNode $ PandocBlock $ BulletList []) group]
                 -- add ordered list node
-                (Node (BlockNode (OrderedListItem _)) _) -> [Node (BlockNode $ PandocBlock $ OrderedList (1, DefaultStyle, DefaultDelim) []) group]
+                (Node (BlockNode (OrderedListItem)) _) -> [Node (BlockNode $ PandocBlock $ OrderedList (1, DefaultStyle, DefaultDelim) []) group]
                 _ -> group
               where
                 listItemInGroup :: Tree DocNode -> Bool
-                listItemInGroup (Node (BlockNode (BulletListItem _)) _) = True
-                listItemInGroup (Node (BlockNode (OrderedListItem _)) _) = True
+                listItemInGroup (Node (BlockNode (BulletListItem)) _) = True
+                listItemInGroup (Node (BlockNode (OrderedListItem)) _) = True
                 listItemInGroup _ = False
 
 buildRawTree :: [AutomergeSpan] -> Tree DocNode
@@ -81,8 +79,8 @@ buildBlockNode blockMarker = case blockMarker of
   ParagraphMarker -> PandocBlock $ Para []
   HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Header level nullAttr []
   CodeBlockMarker -> PandocBlock $ CodeBlock nullAttr T.empty
-  UnorderedListItemMarker -> BulletListItem $ Item []
-  OrderedListItemMarker -> OrderedListItem $ Item []
+  UnorderedListItemMarker -> BulletListItem
+  OrderedListItemMarker -> OrderedListItem
   _ -> undefined -- more blocks to be implemented
 
 toPandoc :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc
@@ -123,13 +121,26 @@ treeNodeToPandocBlock node childrenNodes = case node of
     Right inlines -> case firstInline inlines of
       Just (Str text) -> [Right $ BlockElement $ CodeBlock attr text]
       _ -> [Left $ PandocSyntaxMapError $ T.pack "Error in mapping: Could not extract code block text"]
+  (BlockNode (BulletListItem)) -> concat childrenNodes
+  (BlockNode (OrderedListItem)) -> concat childrenNodes
+  (BlockNode (PandocBlock (BulletList _))) -> case mapToChildBlocks childrenNodes of
+    Left err -> [Left err]
+    Right blocks -> [Right $ BlockElement $ BulletList blocks]
+  (BlockNode (PandocBlock (OrderedList attrs _))) -> case mapToChildBlocks childrenNodes of
+    Left err -> [Left err]
+    Right blocks -> [Right $ BlockElement $ OrderedList attrs blocks]
   (InlineNode inlines) -> [Right $ InlineElement inlines]
+  -- TODO: Remove when all block types are handled
+  _ -> undefined
   where
     concatChildrenInlines :: [[Either PandocError BlockOrInlines]] -> Either PandocError Inlines
     concatChildrenInlines children = concatInlines $ map (>>= assertInlines) $ concat children
       where
         concatInlines :: [Either PandocError Inlines] -> Either PandocError Inlines
         concatInlines eitherInlines = fmap mconcat (sequenceA eitherInlines)
+
+    mapToChildBlocks :: [[Either PandocError BlockOrInlines]] -> Either PandocError [[Block]]
+    mapToChildBlocks children = (traverse . traverse) (>>= assertBlock) children
 
     firstInline :: Inlines -> Maybe Inline
     firstInline = firstValue
