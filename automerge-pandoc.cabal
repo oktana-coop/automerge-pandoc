@@ -38,6 +38,7 @@ library
     , base >=4.7 && <5
     , bytestring >=0.12.1.0
     , containers >=0.7
+    , mtl >=2.3.1
     , pandoc >=3.5
     , pandoc-types >=1.23.1
     , text >=2.1.1

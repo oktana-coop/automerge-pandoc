@@ -1,10 +1,13 @@
 module PandocReader (toPandoc) where
 
 import Automerge (AutomergeSpan (..), BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), TextSpan (..), isParent, takeUntilBlockSpan)
+import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
+import Data.Maybe (fromMaybe)
 import Data.Sequence as Seq (Seq (Empty))
 import qualified Data.Text as T
 import Data.Tree (Tree (Node), foldTree, unfoldForest)
+import Text.Pandoc (PandocError (PandocSyntaxMapError))
 import Text.Pandoc.Builder (Blocks, Inlines, Many (..), blockQuote, codeBlockWith, doc, emph, fromList, headerWith, link, para, str, strong)
 import Text.Pandoc.Class
 import Text.Pandoc.Definition
@@ -83,7 +86,32 @@ buildBlockNode blockMarker = case blockMarker of
   _ -> undefined -- more blocks to be implemented
 
 toPandoc :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc
-toPandoc spans = pure . doc $ convertAutomergeSpans spans
+toPandoc spans = case convertSpansToBlocks spans of
+  Left err -> throwError err
+  Right blocks -> pure $ doc blocks
+  where
+    convertSpansToBlocks :: [AutomergeSpan] -> Either PandocError Blocks
+    convertSpansToBlocks = fromMaybe (Right $ fromList []) . fmap treeToPandocBlocks . buildTree
+
+treeToPandocBlocks :: Tree DocNode -> Either PandocError Blocks
+treeToPandocBlocks tree = sequenceA (foldTree treeNodeToPandocBlock tree) >>= getBlockSeq
+
+getBlockSeq :: [BlockOrInlines] -> Either PandocError Blocks
+getBlockSeq = undefined
+
+assertBlock :: BlockOrInlines -> Either PandocError Block
+assertBlock (BlockElement block) = Right block
+assertBlock (InlineElement _) = Left $ PandocSyntaxMapError $ T.pack "Error in mapping: found orphan inline node"
+
+data BlockOrInlines = BlockElement Block | InlineElement Inlines
+
+treeNodeToPandocBlock :: DocNode -> [[Either PandocError BlockOrInlines]] -> [Either PandocError BlockOrInlines]
+treeNodeToPandocBlock node childrenBlocks = case node of
+  (BlockNode (PandocBlock block@(Para _))) -> undefined
+  _ -> undefined
+
+toPandoc'' :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc
+toPandoc'' spans = pure . doc $ convertAutomergeSpans spans
 
 convertAutomergeSpans :: [AutomergeSpan] -> Blocks
 convertAutomergeSpans = foldl' convertAutomergeSpan (Many Seq.Empty)
