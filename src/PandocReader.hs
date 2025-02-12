@@ -37,7 +37,7 @@ traceTree :: Tree DocNode -> Tree DocNode
 traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
 
 buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
-buildTree = fmap (traceTree . groupListItems . buildRawTree) . nonEmpty
+buildTree = (fmap (traceTree . groupListItems . buildRawTree)) . nonEmpty
 
 groupListItems :: Tree DocNode -> Tree DocNode
 groupListItems = foldTree addListNodes
