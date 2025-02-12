@@ -2,7 +2,7 @@
 
 module PandocReader (toPandoc) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), isParent, takeUntilBlockSpan)
+import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), isParent, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling)
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
 import Data.List.NonEmpty (NonEmpty (..), nonEmpty, toList)
@@ -89,8 +89,12 @@ getChildBlockSeeds blockSpan = addChildBlocks
   where
     addChildBlocks [] = []
     addChildBlocks (x : xs) = case x of
-      Automerge.BlockSpan currentSpan | Automerge.isParent blockSpan currentSpan -> (Automerge.BlockSpan currentSpan, xs) : addChildBlocks xs
+      Automerge.BlockSpan currentSpan | Automerge.isParent blockSpan currentSpan -> createChildBlockSeed currentSpan xs : addChildBlocks xs
       _ -> addChildBlocks xs
+      where
+        createChildBlockSeed :: BlockSpan -> [Automerge.Span] -> (Automerge.Span, [Automerge.Span])
+        -- We stop seeding when we encounter a same block type sibling so that children don't get added (replicated) to all siblings
+        createChildBlockSeed blSpan restSpans = (Automerge.BlockSpan blSpan, Automerge.takeUntilNextSameBlockTypeSibling blSpan restSpans)
 
 buildBlockNode :: BlockMarker -> BlockNode
 buildBlockNode blockMarker = case blockMarker of

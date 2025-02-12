@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, Span (..), BlockMarker (..), Heading (..), HeadingLevel (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, isTopLevelBlock, isParent, isSiblingListItem) where
+module Automerge (parseAutomergeSpans, Span (..), BlockMarker (..), Heading (..), HeadingLevel (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
 
 import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, String), eitherDecode, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
@@ -256,12 +256,21 @@ takeUntilBlockSpan (x : xs) = case x of
   BlockSpan _ -> []
   _ -> x : takeUntilBlockSpan xs
 
+takeUntilNextSameBlockTypeSibling :: BlockSpan -> [Span] -> [Span]
+takeUntilNextSameBlockTypeSibling _ [] = []
+takeUntilNextSameBlockTypeSibling bl (x : xs) = case x of
+  BlockSpan blockSpan | (isSibling blockSpan bl && blockType blockSpan == blockType bl) -> []
+  _ -> x : takeUntilNextSameBlockTypeSibling bl xs
+
 isTopLevelBlock :: BlockSpan -> Bool
 isTopLevelBlock (AutomergeBlock _ parents) = null parents
 
 isParent :: Maybe BlockSpan -> BlockSpan -> Bool
 isParent (Just block@(AutomergeBlock _ parents)) (AutomergeBlock _ candidateParents) = candidateLastParentMatches (blockType block) candidateParents && isProperPrefix parents candidateParents
 isParent Nothing blockSpan = isTopLevelBlock blockSpan
+
+isSibling :: BlockSpan -> BlockSpan -> Bool
+isSibling (AutomergeBlock _ block1Parents) (AutomergeBlock _ block2Parents) = block1Parents == block2Parents
 
 candidateLastParentMatches :: BlockType -> [BlockType] -> Bool
 candidateLastParentMatches parentBlockType potentialChildParents = case unsnoc potentialChildParents of
