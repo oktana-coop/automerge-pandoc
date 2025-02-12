@@ -1,6 +1,6 @@
 module PandocReader (toPandoc) where
 
-import Automerge (AutomergeSpan (..), BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), TextSpan (..), isParent, takeUntilBlockSpan)
+import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), isParent, takeUntilBlockSpan)
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
 import Data.Maybe (fromMaybe)
@@ -35,7 +35,7 @@ data DocNode = Root | BlockNode BlockNode | InlineNode Pandoc.Inlines deriving (
 traceTree :: Tree DocNode -> Tree DocNode
 traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
 
-buildTree :: [AutomergeSpan] -> Maybe (Tree DocNode)
+buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
 buildTree [] = Nothing
 buildTree spans = fmap traceTree $ Just (groupListItems (buildRawTree spans))
 
@@ -71,42 +71,42 @@ groupListItems = foldTree addListNodes
                 listItemInGroup (Node (BlockNode (OrderedListItem)) _) = True
                 listItemInGroup _ = False
 
-buildRawTree :: [AutomergeSpan] -> Tree DocNode
+buildRawTree :: [Automerge.Span] -> Tree DocNode
 buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getChildBlockSeeds Nothing spans
 
-buildDocNode :: (AutomergeSpan, [AutomergeSpan]) -> (DocNode, [(AutomergeSpan, [AutomergeSpan])])
+buildDocNode :: (Automerge.Span, [Automerge.Span]) -> (DocNode, [(Automerge.Span, [Automerge.Span])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
-  (BlockSpan blockSpan@(AutomergeBlock blockMarker _)) -> (BlockNode $ buildBlockNode blockMarker, getChildSeeds blockSpan remainingSpans)
-  (TextSpan textSpan) -> (InlineNode $ convertTextSpan textSpan, [])
+  (Automerge.BlockSpan blockSpan@(AutomergeBlock blockMarker _)) -> (BlockNode $ buildBlockNode blockMarker, getChildSeeds blockSpan remainingSpans)
+  (Automerge.TextSpan textSpan) -> (InlineNode $ convertTextSpan textSpan, [])
 
-getChildSeeds :: BlockSpan -> [AutomergeSpan] -> [(AutomergeSpan, [AutomergeSpan])]
-getChildSeeds blockSpan = (addChildlessSeed . takeUntilBlockSpan) <> (getChildBlockSeeds $ Just blockSpan)
+getChildSeeds :: Automerge.BlockSpan -> [Automerge.Span] -> [(Automerge.Span, [Automerge.Span])]
+getChildSeeds blockSpan = (addChildlessSeed . Automerge.takeUntilBlockSpan) <> (getChildBlockSeeds $ Just blockSpan)
   where
     addChildlessSeed = map (\x -> (x, []))
 
-getChildBlockSeeds :: Maybe BlockSpan -> [AutomergeSpan] -> [(AutomergeSpan, [AutomergeSpan])]
+getChildBlockSeeds :: Maybe Automerge.BlockSpan -> [Automerge.Span] -> [(Automerge.Span, [Automerge.Span])]
 getChildBlockSeeds blockSpan = addChildBlocks
   where
     addChildBlocks [] = []
     addChildBlocks (x : xs) = case x of
-      BlockSpan currentSpan | isParent blockSpan currentSpan -> (BlockSpan currentSpan, xs) : addChildBlocks xs
+      Automerge.BlockSpan currentSpan | Automerge.isParent blockSpan currentSpan -> (Automerge.BlockSpan currentSpan, xs) : addChildBlocks xs
       _ -> addChildBlocks xs
 
 buildBlockNode :: BlockMarker -> BlockNode
 buildBlockNode blockMarker = case blockMarker of
-  ParagraphMarker -> PandocBlock $ Pandoc.Para []
-  HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Pandoc.Header level nullAttr []
-  CodeBlockMarker -> PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
-  UnorderedListItemMarker -> BulletListItem
-  OrderedListItemMarker -> OrderedListItem
+  Automerge.ParagraphMarker -> PandocBlock $ Pandoc.Para []
+  Automerge.HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Pandoc.Header level nullAttr []
+  Automerge.CodeBlockMarker -> PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
+  Automerge.UnorderedListItemMarker -> BulletListItem
+  Automerge.OrderedListItemMarker -> OrderedListItem
   _ -> undefined -- more blocks to be implemented
 
-toPandoc :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc.Pandoc
+toPandoc :: (PandocMonad m) => [Automerge.Span] -> m Pandoc.Pandoc
 toPandoc spans = case convertSpansToBlocks spans of
   Left err -> throwError err
   Right blocks -> pure $ Pandoc.doc blocks
   where
-    convertSpansToBlocks :: [AutomergeSpan] -> Either PandocError Pandoc.Blocks
+    convertSpansToBlocks :: [Automerge.Span] -> Either PandocError Pandoc.Blocks
     convertSpansToBlocks = fromMaybe (Right $ Pandoc.fromList []) . fmap treeToPandocBlocks . buildTree
 
 treeToPandocBlocks :: Tree DocNode -> Either PandocError Pandoc.Blocks
@@ -170,16 +170,16 @@ treeNodeToPandocBlock node childrenNodes = case node of
     firstInline :: Pandoc.Inlines -> Maybe Pandoc.Inline
     firstInline = firstValue
 
-convertTextSpan :: TextSpan -> Pandoc.Inlines
+convertTextSpan :: Automerge.TextSpan -> Pandoc.Inlines
 convertTextSpan = convertMarksToInlines <*> convertTextToInlines
 
-convertTextToInlines :: TextSpan -> Pandoc.Inlines
+convertTextToInlines :: Automerge.TextSpan -> Pandoc.Inlines
 convertTextToInlines = Pandoc.str . value
 
-convertMarksToInlines :: TextSpan -> Pandoc.Inlines -> Pandoc.Inlines
+convertMarksToInlines :: Automerge.TextSpan -> Pandoc.Inlines -> Pandoc.Inlines
 convertMarksToInlines textSpan inlines = foldl' (flip markToInlines) inlines $ marks textSpan
 
-markToInlines :: Mark -> Pandoc.Inlines -> Pandoc.Inlines
+markToInlines :: Automerge.Mark -> Pandoc.Inlines -> Pandoc.Inlines
 markToInlines mark = case mark of
   Automerge.Strong -> Pandoc.strong
   Automerge.Emphasis -> Pandoc.emph

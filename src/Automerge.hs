@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, AutomergeSpan (..), BlockMarker (..), Heading (..), HeadingLevel (..), BlockSpan (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, isTopLevelBlock, isParent, isSiblingListItem) where
+module Automerge (parseAutomergeSpans, Span (..), BlockMarker (..), Heading (..), HeadingLevel (..), BlockSpan (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, isTopLevelBlock, isParent, isSiblingListItem) where
 
 import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, String), eitherDecode, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
@@ -66,7 +66,7 @@ instance FromJSON BlockType where
 
 instance ToJSON BlockType where
   toJSON :: BlockType -> Value
-  toJSON blockType = case blockType of
+  toJSON bt = case bt of
     ParagraphType -> String "paragraph"
     HeadingType -> String "heading"
     CodeBlockType -> String "code-block"
@@ -104,12 +104,12 @@ blockType (AutomergeBlock (OrderedListItemMarker) _) = OrderedListItemType
 blockType (AutomergeBlock (UnorderedListItemMarker) _) = UnorderedListItemType
 blockType (AutomergeBlock (ImageBlockMarker) _) = ImageType
 
-data AutomergeSpan
+data Span
   = BlockSpan BlockSpan
   | TextSpan TextSpan
   deriving (Show, Eq)
 
-instance FromJSON AutomergeSpan where
+instance FromJSON Span where
   parseJSON = withObject "AutomergeSpan" $ \v -> do
     elementType <- (v .: "type" :: Parser String)
     case elementType of
@@ -117,12 +117,12 @@ instance FromJSON AutomergeSpan where
       "text" -> parseInline v
       _ -> fail "Unknown span type"
 
-parseBlock :: Object -> Parser AutomergeSpan
+parseBlock :: Object -> Parser Span
 parseBlock v = do
   blockData <- v .: "value"
-  blockType <- (blockData .: "type" :: Parser BlockType)
+  bt <- (blockData .: "type" :: Parser BlockType)
   parents <- (blockData .: "parents" :: Parser [BlockType])
-  case blockType of
+  case bt of
     ParagraphType -> pure $ BlockSpan $ AutomergeBlock ParagraphMarker parents
     HeadingType -> do
       attrs <- blockData .: "attrs"
@@ -134,7 +134,7 @@ parseBlock v = do
     UnorderedListItemType -> pure $ BlockSpan $ AutomergeBlock UnorderedListItemMarker parents
     ImageType -> pure $ BlockSpan $ AutomergeBlock ImageBlockMarker parents
 
-parseInline :: Object -> Parser AutomergeSpan
+parseInline :: Object -> Parser Span
 parseInline v = do
   parsedValue <- v .: "value"
   marksKeyMap <- v .:? "marks" .!= KM.empty
@@ -153,10 +153,10 @@ parseMark (k, Bool True) = case K.toText k of
   _ -> fail $ "Unexpected mark with boolean value: " ++ T.unpack (K.toText k)
 parseMark _ = fail "Invalid format in marks"
 
-parseAutomergeSpans :: BL.ByteString -> Either String [AutomergeSpan]
+parseAutomergeSpans :: BL.ByteString -> Either String [Span]
 parseAutomergeSpans = eitherDecode
 
-instance ToJSON AutomergeSpan where
+instance ToJSON Span where
   toJSON (BlockSpan (AutomergeBlock blockMarker parents)) = case blockMarker of
     ParagraphMarker ->
       object
@@ -247,10 +247,10 @@ instance ToJSON AutomergeSpan where
         Emphasis -> (K.fromText "em", Bool True)
         LinkMark link -> (K.fromText "link", String $ stringifyObject link)
 
-toJSONText :: [AutomergeSpan] -> T.Text
+toJSONText :: [Span] -> T.Text
 toJSONText = decodeUtf8 . BSL8.toStrict . encode
 
-takeUntilBlockSpan :: [AutomergeSpan] -> [AutomergeSpan]
+takeUntilBlockSpan :: [Span] -> [Span]
 takeUntilBlockSpan [] = []
 takeUntilBlockSpan (x : xs) = case x of
   BlockSpan _ -> []
