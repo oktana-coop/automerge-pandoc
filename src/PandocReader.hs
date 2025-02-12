@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module PandocReader (toPandoc) where
 
 import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), isParent, takeUntilBlockSpan)
@@ -119,10 +121,10 @@ data BlockOrInlines = BlockElement Pandoc.Block | InlineElement Pandoc.Inlines
 
 assertBlock :: BlockOrInlines -> Either PandocError Pandoc.Block
 assertBlock (BlockElement block) = Right block
-assertBlock (InlineElement _) = Left $ PandocSyntaxMapError $ T.pack "Error in mapping: found orphan inline node"
+assertBlock (InlineElement _) = Left $ PandocSyntaxMapError "Error in mapping: found orphan inline node"
 
 assertInlines :: BlockOrInlines -> Either PandocError Pandoc.Inlines
-assertInlines (BlockElement _) = Left $ PandocSyntaxMapError $ T.pack "Error in mapping: found block node in inline node slot"
+assertInlines (BlockElement _) = Left $ PandocSyntaxMapError "Error in mapping: found block node in inline node slot"
 assertInlines (InlineElement inlines) = Right $ inlines
 
 treeNodeToPandocBlock :: DocNode -> [[Either PandocError BlockOrInlines]] -> [Either PandocError BlockOrInlines]
@@ -138,7 +140,7 @@ treeNodeToPandocBlock node childrenNodes = case node of
     Left err -> [Left err]
     Right inlines -> case firstInline inlines of
       Just (Str text) -> [Right $ BlockElement $ Pandoc.CodeBlock attr text]
-      _ -> [Left $ PandocSyntaxMapError $ T.pack "Error in mapping: Could not extract code block text"]
+      _ -> [Left $ PandocSyntaxMapError "Error in mapping: Could not extract code block text"]
   (BlockNode (BulletListItem)) -> wrapInlinesToPlain $ concat childrenNodes
   (BlockNode (OrderedListItem)) -> wrapInlinesToPlain $ concat childrenNodes
   (BlockNode (PandocBlock (Pandoc.BulletList _))) -> case mapToChildBlocks childrenNodes of
