@@ -104,9 +104,7 @@ buildBlockNode blockMarker = case blockMarker of
   _ -> undefined -- more blocks to be implemented
 
 toPandoc :: (PandocMonad m) => [Automerge.Span] -> m Pandoc.Pandoc
-toPandoc spans = case convertSpansToBlocks spans of
-  Left err -> throwError err
-  Right blocks -> pure $ Pandoc.doc blocks
+toPandoc = (either throwError (pure . Pandoc.doc)) . convertSpansToBlocks
   where
     convertSpansToBlocks :: [Automerge.Span] -> Either PandocError Pandoc.Blocks
     convertSpansToBlocks = fromMaybe (Right $ Pandoc.fromList []) . fmap treeToPandocBlocks . buildTree
