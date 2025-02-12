@@ -49,7 +49,6 @@ groupListItems = foldTree addListNodes
       Root -> groupAdjacentListItems subtrees
       BlockNode _ -> groupAdjacentListItems subtrees
       InlineNode _ -> subtrees
-      where
 
 groupAdjacentListItems :: [Tree DocNode] -> [Tree DocNode]
 groupAdjacentListItems = concatMap nestListItemGroupsUnderList . groupBy isAdjacentListItemNode
