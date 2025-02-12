@@ -3,6 +3,7 @@ module PandocReader (toPandoc) where
 import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), isParent, takeUntilBlockSpan)
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
+import Data.List.NonEmpty (NonEmpty (..), nonEmpty, toList)
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Data.Tree (Tree (Node), drawTree, foldTree, unfoldForest)
@@ -36,8 +37,7 @@ traceTree :: Tree DocNode -> Tree DocNode
 traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
 
 buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
-buildTree [] = Nothing
-buildTree spans = fmap traceTree $ Just (groupListItems (buildRawTree spans))
+buildTree = fmap (traceTree . groupListItems . buildRawTree) . nonEmpty
 
 groupListItems :: Tree DocNode -> Tree DocNode
 groupListItems = foldTree addListNodes
@@ -71,8 +71,8 @@ groupListItems = foldTree addListNodes
                 listItemInGroup (Node (BlockNode (OrderedListItem)) _) = True
                 listItemInGroup _ = False
 
-buildRawTree :: [Automerge.Span] -> Tree DocNode
-buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getChildBlockSeeds Nothing spans
+buildRawTree :: NonEmpty Automerge.Span -> Tree DocNode
+buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getChildBlockSeeds Nothing $ Data.List.NonEmpty.toList spans
 
 buildDocNode :: (Automerge.Span, [Automerge.Span]) -> (DocNode, [(Automerge.Span, [Automerge.Span])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
