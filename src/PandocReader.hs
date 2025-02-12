@@ -8,14 +8,29 @@ import qualified Data.Text as T
 import Data.Tree (Tree (Node), drawTree, foldTree, unfoldForest)
 import Debug.Trace
 import Text.Pandoc (PandocError (PandocSyntaxMapError))
-import Text.Pandoc.Builder (Blocks, Inlines, doc, emph, fromList, link, str, strong, toList)
-import Text.Pandoc.Class
-import Text.Pandoc.Definition
+import Text.Pandoc.Builder as Pandoc
+  ( Block (..),
+    Blocks,
+    Inline (Str),
+    Inlines,
+    ListNumberDelim (DefaultDelim),
+    ListNumberStyle (DefaultStyle),
+    Pandoc,
+    doc,
+    emph,
+    fromList,
+    link,
+    nullAttr,
+    str,
+    strong,
+    toList,
+  )
+import Text.Pandoc.Class (PandocMonad)
 import Utils.Sequence (firstValue)
 
-data BlockNode = PandocBlock Block | BulletListItem | OrderedListItem deriving (Show)
+data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem deriving (Show)
 
-data DocNode = Root | BlockNode BlockNode | InlineNode Inlines deriving (Show)
+data DocNode = Root | BlockNode BlockNode | InlineNode Pandoc.Inlines deriving (Show)
 
 traceTree :: Tree DocNode -> Tree DocNode
 traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
@@ -46,9 +61,9 @@ groupListItems = foldTree addListNodes
               Nothing -> group
               Just item -> case item of
                 -- add bullet list node
-                (Node (BlockNode (BulletListItem)) _) -> [Node (BlockNode $ PandocBlock $ BulletList []) group]
+                (Node (BlockNode (BulletListItem)) _) -> [Node (BlockNode $ PandocBlock $ Pandoc.BulletList []) group]
                 -- add ordered list node
-                (Node (BlockNode (OrderedListItem)) _) -> [Node (BlockNode $ PandocBlock $ OrderedList (1, DefaultStyle, DefaultDelim) []) group]
+                (Node (BlockNode (OrderedListItem)) _) -> [Node (BlockNode $ PandocBlock $ Pandoc.OrderedList (1, DefaultStyle, DefaultDelim) []) group]
                 _ -> group
               where
                 listItemInGroup :: Tree DocNode -> Bool
@@ -79,67 +94,67 @@ getChildBlockSeeds blockSpan = addChildBlocks
 
 buildBlockNode :: BlockMarker -> BlockNode
 buildBlockNode blockMarker = case blockMarker of
-  ParagraphMarker -> PandocBlock $ Para []
-  HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Header level nullAttr []
-  CodeBlockMarker -> PandocBlock $ CodeBlock nullAttr T.empty
+  ParagraphMarker -> PandocBlock $ Pandoc.Para []
+  HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Pandoc.Header level nullAttr []
+  CodeBlockMarker -> PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
   UnorderedListItemMarker -> BulletListItem
   OrderedListItemMarker -> OrderedListItem
   _ -> undefined -- more blocks to be implemented
 
-toPandoc :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc
+toPandoc :: (PandocMonad m) => [AutomergeSpan] -> m Pandoc.Pandoc
 toPandoc spans = case convertSpansToBlocks spans of
   Left err -> throwError err
-  Right blocks -> pure $ doc blocks
+  Right blocks -> pure $ Pandoc.doc blocks
   where
-    convertSpansToBlocks :: [AutomergeSpan] -> Either PandocError Blocks
-    convertSpansToBlocks = fromMaybe (Right $ fromList []) . fmap treeToPandocBlocks . buildTree
+    convertSpansToBlocks :: [AutomergeSpan] -> Either PandocError Pandoc.Blocks
+    convertSpansToBlocks = fromMaybe (Right $ Pandoc.fromList []) . fmap treeToPandocBlocks . buildTree
 
-treeToPandocBlocks :: Tree DocNode -> Either PandocError Blocks
+treeToPandocBlocks :: Tree DocNode -> Either PandocError Pandoc.Blocks
 treeToPandocBlocks tree = sequenceA (foldTree treeNodeToPandocBlock tree) >>= getBlockSeq
 
-getBlockSeq :: [BlockOrInlines] -> Either PandocError Blocks
-getBlockSeq = fmap fromList . traverse assertBlock
+getBlockSeq :: [BlockOrInlines] -> Either PandocError Pandoc.Blocks
+getBlockSeq = fmap Pandoc.fromList . traverse assertBlock
 
-data BlockOrInlines = BlockElement Block | InlineElement Inlines
+data BlockOrInlines = BlockElement Pandoc.Block | InlineElement Pandoc.Inlines
 
-assertBlock :: BlockOrInlines -> Either PandocError Block
+assertBlock :: BlockOrInlines -> Either PandocError Pandoc.Block
 assertBlock (BlockElement block) = Right block
 assertBlock (InlineElement _) = Left $ PandocSyntaxMapError $ T.pack "Error in mapping: found orphan inline node"
 
-assertInlines :: BlockOrInlines -> Either PandocError Inlines
+assertInlines :: BlockOrInlines -> Either PandocError Pandoc.Inlines
 assertInlines (BlockElement _) = Left $ PandocSyntaxMapError $ T.pack "Error in mapping: found block node in inline node slot"
 assertInlines (InlineElement inlines) = Right $ inlines
 
 treeNodeToPandocBlock :: DocNode -> [[Either PandocError BlockOrInlines]] -> [Either PandocError BlockOrInlines]
 treeNodeToPandocBlock node childrenNodes = case node of
   Root -> concat childrenNodes
-  (BlockNode (PandocBlock (Para _))) -> case concatChildrenInlines childrenNodes of
+  (BlockNode (PandocBlock (Pandoc.Para _))) -> case concatChildrenInlines childrenNodes of
     Left err -> [Left err]
-    Right inlines -> [Right $ BlockElement $ Para $ toList inlines]
-  (BlockNode (PandocBlock (Header level attr _))) -> case concatChildrenInlines childrenNodes of
+    Right inlines -> [Right $ BlockElement $ Pandoc.Para $ Pandoc.toList inlines]
+  (BlockNode (PandocBlock (Pandoc.Header level attr _))) -> case concatChildrenInlines childrenNodes of
     Left err -> [Left err]
-    Right inlines -> [Right $ BlockElement $ Header level attr $ toList inlines]
-  (BlockNode (PandocBlock (CodeBlock attr _))) -> case concatChildrenInlines childrenNodes of
+    Right inlines -> [Right $ BlockElement $ Pandoc.Header level attr $ Pandoc.toList inlines]
+  (BlockNode (PandocBlock (Pandoc.CodeBlock attr _))) -> case concatChildrenInlines childrenNodes of
     Left err -> [Left err]
     Right inlines -> case firstInline inlines of
-      Just (Str text) -> [Right $ BlockElement $ CodeBlock attr text]
+      Just (Str text) -> [Right $ BlockElement $ Pandoc.CodeBlock attr text]
       _ -> [Left $ PandocSyntaxMapError $ T.pack "Error in mapping: Could not extract code block text"]
   (BlockNode (BulletListItem)) -> wrapInlinesToPlain $ concat childrenNodes
   (BlockNode (OrderedListItem)) -> wrapInlinesToPlain $ concat childrenNodes
-  (BlockNode (PandocBlock (BulletList _))) -> case mapToChildBlocks childrenNodes of
+  (BlockNode (PandocBlock (Pandoc.BulletList _))) -> case mapToChildBlocks childrenNodes of
     Left err -> [Left err]
-    Right blocks -> [Right $ BlockElement $ BulletList blocks]
-  (BlockNode (PandocBlock (OrderedList attrs _))) -> case mapToChildBlocks childrenNodes of
+    Right blocks -> [Right $ BlockElement $ Pandoc.BulletList blocks]
+  (BlockNode (PandocBlock (Pandoc.OrderedList attrs _))) -> case mapToChildBlocks childrenNodes of
     Left err -> [Left err]
-    Right blocks -> [Right $ BlockElement $ OrderedList attrs blocks]
+    Right blocks -> [Right $ BlockElement $ Pandoc.OrderedList attrs blocks]
   (InlineNode inlines) -> [Right $ InlineElement inlines]
   -- TODO: Remove when all block types are handled
   _ -> undefined
   where
-    concatChildrenInlines :: [[Either PandocError BlockOrInlines]] -> Either PandocError Inlines
+    concatChildrenInlines :: [[Either PandocError BlockOrInlines]] -> Either PandocError Pandoc.Inlines
     concatChildrenInlines children = concatInlines $ map (>>= assertInlines) $ concat children
       where
-        concatInlines :: [Either PandocError Inlines] -> Either PandocError Inlines
+        concatInlines :: [Either PandocError Pandoc.Inlines] -> Either PandocError Pandoc.Inlines
         concatInlines eitherInlines = fmap mconcat $ sequenceA eitherInlines
 
     wrapInlinesToPlain :: [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
@@ -147,25 +162,25 @@ treeNodeToPandocBlock node childrenNodes = case node of
       where
         wrapInlines :: BlockOrInlines -> BlockOrInlines
         wrapInlines (BlockElement block) = BlockElement block
-        wrapInlines (InlineElement inlines) = BlockElement $ Plain $ toList inlines
+        wrapInlines (InlineElement inlines) = BlockElement $ Pandoc.Plain $ Pandoc.toList inlines
 
-    mapToChildBlocks :: [[Either PandocError BlockOrInlines]] -> Either PandocError [[Block]]
+    mapToChildBlocks :: [[Either PandocError BlockOrInlines]] -> Either PandocError [[Pandoc.Block]]
     mapToChildBlocks children = (traverse . traverse) (>>= assertBlock) children
 
-    firstInline :: Inlines -> Maybe Inline
+    firstInline :: Pandoc.Inlines -> Maybe Pandoc.Inline
     firstInline = firstValue
 
-convertTextSpan :: TextSpan -> Inlines
+convertTextSpan :: TextSpan -> Pandoc.Inlines
 convertTextSpan = convertMarksToInlines <*> convertTextToInlines
 
-convertTextToInlines :: TextSpan -> Inlines
-convertTextToInlines = str . value
+convertTextToInlines :: TextSpan -> Pandoc.Inlines
+convertTextToInlines = Pandoc.str . value
 
-convertMarksToInlines :: TextSpan -> Inlines -> Inlines
+convertMarksToInlines :: TextSpan -> Pandoc.Inlines -> Pandoc.Inlines
 convertMarksToInlines textSpan inlines = foldl' (flip markToInlines) inlines $ marks textSpan
 
-markToInlines :: Mark -> Inlines -> Inlines
+markToInlines :: Mark -> Pandoc.Inlines -> Pandoc.Inlines
 markToInlines mark = case mark of
-  Automerge.Strong -> strong
-  Automerge.Emphasis -> emph
-  Automerge.LinkMark automergeLink -> link (url automergeLink) (title automergeLink)
+  Automerge.Strong -> Pandoc.strong
+  Automerge.Emphasis -> Pandoc.emph
+  Automerge.LinkMark automergeLink -> Pandoc.link (url automergeLink) (title automergeLink)
