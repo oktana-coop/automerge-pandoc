@@ -157,11 +157,11 @@ treeNodeToPandocBlock node childrenNodes = case node of
   -- TODO: Remove when all block types are handled
   _ -> undefined
   where
-    concatInlines :: [Either PandocError Pandoc.Inlines] -> Either PandocError Pandoc.Inlines
-    concatInlines eitherInlines = fmap mconcat $ sequenceA eitherInlines
-
     concatChildrenInlines :: [[Either PandocError BlockOrInlines]] -> Either PandocError Pandoc.Inlines
     concatChildrenInlines children = concatInlines $ map (>>= assertInlines) $ concat children
+      where
+        concatInlines :: [Either PandocError Pandoc.Inlines] -> Either PandocError Pandoc.Inlines
+        concatInlines eitherInlines = fmap mconcat $ sequenceA eitherInlines
 
     concatAdjacentInlines :: [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
     concatAdjacentInlines = foldr mergeOrAppendAdjacent []

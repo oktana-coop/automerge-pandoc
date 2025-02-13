@@ -44,17 +44,17 @@ inlinesToAutomergeTextSpans = mergeSameMarkSpans . foldMap inlineToTextSpan
 
 mergeSameMarkSpans :: [Automerge.TextSpan] -> [Automerge.TextSpan]
 mergeSameMarkSpans = foldr mergeOrAppendAdjacent []
-
--- This is the folding function for merging the adjacent elements if their marks are the same
-mergeOrAppendAdjacent :: Automerge.TextSpan -> [Automerge.TextSpan] -> [Automerge.TextSpan]
-mergeOrAppendAdjacent x [] = [x]
--- pattern-match on: the current element (x), the one to its right (firstOfRest) and the rest of the fold
-mergeOrAppendAdjacent x (firstOfRest : rest) =
-  if marks x == marks firstOfRest
-    -- if the element's marks are the same with the one to its right, we merge them and then add them to the rest of the fold.
-    then (x <> firstOfRest) : rest
-    -- if they are not the same we end up with an extra text span in the list for the current element (we prepend it to the existing list for the fold.)
-    else x : firstOfRest : rest
+  where
+    -- This is the folding function for merging the adjacent elements if their marks are the same
+    mergeOrAppendAdjacent :: Automerge.TextSpan -> [Automerge.TextSpan] -> [Automerge.TextSpan]
+    mergeOrAppendAdjacent x [] = [x]
+    -- pattern-match on: the current element (x), the one to its right (firstOfRest) and the rest of the fold
+    mergeOrAppendAdjacent x (firstOfRest : rest) =
+      if marks x == marks firstOfRest
+        -- if the element's marks are the same with the one to its right, we merge them and then add them to the rest of the fold.
+        then (x <> firstOfRest) : rest
+        -- if they are not the same we end up with an extra text span in the list for the current element (we prepend it to the existing list for the fold.)
+        else x : firstOfRest : rest
 
 inlineToTextSpan :: Pandoc.Inline -> [Automerge.TextSpan]
 inlineToTextSpan inline = case inline of
