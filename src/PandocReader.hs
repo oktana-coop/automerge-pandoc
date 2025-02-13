@@ -134,25 +134,19 @@ data BlockOrInlines = BlockElement Pandoc.Block | InlineElement Pandoc.Inlines
 treeNodeToPandocBlock :: DocNode -> [[Either PandocError BlockOrInlines]] -> [Either PandocError BlockOrInlines]
 treeNodeToPandocBlock node childrenNodes = case node of
   Root -> concat childrenNodes
-  (BlockNode (PandocBlock (Pandoc.Para _))) -> case concatChildrenInlines childrenNodes of
-    Left err -> [Left err]
-    Right inlines -> [Right $ BlockElement $ Pandoc.Para $ Pandoc.toList inlines]
-  (BlockNode (PandocBlock (Pandoc.Header level attr _))) -> case concatChildrenInlines childrenNodes of
-    Left err -> [Left err]
-    Right inlines -> [Right $ BlockElement $ Pandoc.Header level attr $ Pandoc.toList inlines]
-  (BlockNode (PandocBlock (Pandoc.CodeBlock attr _))) -> case concatChildrenInlines childrenNodes of
-    Left err -> [Left err]
-    Right inlines -> case firstInline inlines of
-      Just (Str text) -> [Right $ BlockElement $ Pandoc.CodeBlock attr text]
-      _ -> [Left $ PandocSyntaxMapError "Error in mapping: Could not extract code block text"]
+  (BlockNode (PandocBlock (Pandoc.Para _))) -> [fmap (BlockElement . Pandoc.Para . Pandoc.toList) (concatChildrenInlines childrenNodes)]
+  (BlockNode (PandocBlock (Pandoc.Header level attr _))) -> [fmap (BlockElement . Pandoc.Header level attr . Pandoc.toList) (concatChildrenInlines childrenNodes)]
+  (BlockNode (PandocBlock (Pandoc.CodeBlock attr _))) ->
+    [ do
+        inlines <- concatChildrenInlines childrenNodes
+        case firstInline inlines of
+          Just (Str text) -> Right $ BlockElement $ Pandoc.CodeBlock attr text
+          _ -> Left $ PandocSyntaxMapError "Error in mapping: Could not extract code block text"
+    ]
   (BlockNode (BulletListItem)) -> wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes
-  (BlockNode (OrderedListItem)) -> wrapInlinesToPlain $ concat childrenNodes
-  (BlockNode (PandocBlock (Pandoc.BulletList _))) -> case mapToChildBlocks childrenNodes of
-    Left err -> [Left err]
-    Right blocks -> [Right $ BlockElement $ Pandoc.BulletList blocks]
-  (BlockNode (PandocBlock (Pandoc.OrderedList attrs _))) -> case mapToChildBlocks childrenNodes of
-    Left err -> [Left err]
-    Right blocks -> [Right $ BlockElement $ Pandoc.OrderedList attrs blocks]
+  (BlockNode (OrderedListItem)) -> wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes
+  (BlockNode (PandocBlock (Pandoc.BulletList _))) -> [fmap (BlockElement . Pandoc.BulletList) (mapToChildBlocks childrenNodes)]
+  (BlockNode (PandocBlock (Pandoc.OrderedList attrs _))) -> [fmap (BlockElement . Pandoc.OrderedList attrs) (mapToChildBlocks childrenNodes)]
   (InlineNode inlines) -> [Right $ InlineElement inlines]
   -- TODO: Remove when all block types are handled
   _ -> undefined
@@ -168,7 +162,8 @@ treeNodeToPandocBlock node childrenNodes = case node of
       where
         mergeOrAppendAdjacent :: Either PandocError BlockOrInlines -> [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
         mergeOrAppendAdjacent x [] = [x]
-        mergeOrAppendAdjacent (Right (InlineElement currentInlines)) (Right (InlineElement firstOfRestInlines) : rest) = (Right (InlineElement (currentInlines <> firstOfRestInlines)) : rest)
+        mergeOrAppendAdjacent (Right (InlineElement currentInlines)) (Right (InlineElement firstOfRestInlines) : rest) =
+          (Right (InlineElement (currentInlines <> firstOfRestInlines)) : rest)
         mergeOrAppendAdjacent x rest = (x : rest)
 
     wrapInlinesToPlain :: [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
