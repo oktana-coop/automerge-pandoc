@@ -31,6 +31,12 @@ import Text.Pandoc.Builder as Pandoc
 import Text.Pandoc.Class (PandocMonad)
 import Utils.Sequence (firstValue)
 
+toPandoc :: (PandocMonad m) => [Automerge.Span] -> m Pandoc.Pandoc
+toPandoc = (either throwError (pure . Pandoc.doc)) . convertSpansToBlocks
+  where
+    convertSpansToBlocks :: [Automerge.Span] -> Either PandocError Pandoc.Blocks
+    convertSpansToBlocks = fromMaybe (Right $ Pandoc.fromList []) . fmap treeToPandocBlocks . buildTree
+
 data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem deriving (Show)
 
 data DocNode = Root | BlockNode BlockNode | InlineNode Pandoc.Inlines deriving (Show)
@@ -40,36 +46,6 @@ traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
 
 buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
 buildTree = (fmap (traceTree . groupListItems . buildRawTree)) . nonEmpty
-
-groupListItems :: Tree DocNode -> Tree DocNode
-groupListItems = foldTree addListNodes
-  where
-    addListNodes :: DocNode -> [Tree DocNode] -> Tree DocNode
-    addListNodes node subtrees = Node node $ case node of
-      Root -> groupAdjacentListItems subtrees
-      BlockNode _ -> groupAdjacentListItems subtrees
-      InlineNode _ -> subtrees
-
-groupAdjacentListItems :: [Tree DocNode] -> [Tree DocNode]
-groupAdjacentListItems = concatMap nestListItemGroupsUnderList . groupBy isAdjacentListItemNode
-  where
-    isAdjacentListItemNode :: Tree DocNode -> Tree DocNode -> Bool
-    isAdjacentListItemNode (Node (BlockNode (BulletListItem)) _) (Node (BlockNode (BulletListItem)) _) = True
-    isAdjacentListItemNode (Node (BlockNode (OrderedListItem)) _) (Node (BlockNode (OrderedListItem)) _) = True
-    isAdjacentListItemNode _ _ = False
-
-    nestListItemGroupsUnderList :: [Tree DocNode] -> [Tree DocNode]
-    nestListItemGroupsUnderList group = case (find listItemInGroup group) of
-      -- add bullet list node
-      Just (Node (BlockNode (BulletListItem)) _) -> [Node (BlockNode $ PandocBlock $ Pandoc.BulletList []) group]
-      -- add ordered list node
-      Just (Node (BlockNode (OrderedListItem)) _) -> [Node (BlockNode $ PandocBlock $ Pandoc.OrderedList (1, DefaultStyle, DefaultDelim) []) group]
-      _ -> group
-
-listItemInGroup :: Tree DocNode -> Bool
-listItemInGroup (Node (BlockNode (BulletListItem)) _) = True
-listItemInGroup (Node (BlockNode (OrderedListItem)) _) = True
-listItemInGroup _ = False
 
 buildRawTree :: NonEmpty Automerge.Span -> Tree DocNode
 buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getChildBlockSeeds Nothing $ Data.List.NonEmpty.toList spans
@@ -105,27 +81,55 @@ buildBlockNode blockMarker = case blockMarker of
   Automerge.OrderedListItemMarker -> OrderedListItem
   _ -> undefined -- more blocks to be implemented
 
-toPandoc :: (PandocMonad m) => [Automerge.Span] -> m Pandoc.Pandoc
-toPandoc = (either throwError (pure . Pandoc.doc)) . convertSpansToBlocks
+convertTextSpan :: Automerge.TextSpan -> Pandoc.Inlines
+convertTextSpan = convertMarksToInlines <*> convertTextToInlines
+
+convertTextToInlines :: Automerge.TextSpan -> Pandoc.Inlines
+convertTextToInlines = Pandoc.str . value
+
+convertMarksToInlines :: Automerge.TextSpan -> Pandoc.Inlines -> Pandoc.Inlines
+convertMarksToInlines textSpan inlines = foldl' (flip markToInlines) inlines $ marks textSpan
+
+markToInlines :: Automerge.Mark -> Pandoc.Inlines -> Pandoc.Inlines
+markToInlines mark = case mark of
+  Automerge.Strong -> Pandoc.strong
+  Automerge.Emphasis -> Pandoc.emph
+  Automerge.LinkMark automergeLink -> Pandoc.link (url automergeLink) (title automergeLink)
+
+groupListItems :: Tree DocNode -> Tree DocNode
+groupListItems = foldTree addListNodes
   where
-    convertSpansToBlocks :: [Automerge.Span] -> Either PandocError Pandoc.Blocks
-    convertSpansToBlocks = fromMaybe (Right $ Pandoc.fromList []) . fmap treeToPandocBlocks . buildTree
+    addListNodes :: DocNode -> [Tree DocNode] -> Tree DocNode
+    addListNodes node subtrees = Node node $ case node of
+      Root -> groupAdjacentListItems subtrees
+      BlockNode _ -> groupAdjacentListItems subtrees
+      InlineNode _ -> subtrees
+
+groupAdjacentListItems :: [Tree DocNode] -> [Tree DocNode]
+groupAdjacentListItems = concatMap nestListItemGroupsUnderList . groupBy isAdjacentListItemNode
+  where
+    isAdjacentListItemNode :: Tree DocNode -> Tree DocNode -> Bool
+    isAdjacentListItemNode (Node (BlockNode (BulletListItem)) _) (Node (BlockNode (BulletListItem)) _) = True
+    isAdjacentListItemNode (Node (BlockNode (OrderedListItem)) _) (Node (BlockNode (OrderedListItem)) _) = True
+    isAdjacentListItemNode _ _ = False
+
+    nestListItemGroupsUnderList :: [Tree DocNode] -> [Tree DocNode]
+    nestListItemGroupsUnderList group = case (find listItemInGroup group) of
+      -- add bullet list node
+      Just (Node (BlockNode (BulletListItem)) _) -> [Node (BlockNode $ PandocBlock $ Pandoc.BulletList []) group]
+      -- add ordered list node
+      Just (Node (BlockNode (OrderedListItem)) _) -> [Node (BlockNode $ PandocBlock $ Pandoc.OrderedList (1, DefaultStyle, DefaultDelim) []) group]
+      _ -> group
+
+listItemInGroup :: Tree DocNode -> Bool
+listItemInGroup (Node (BlockNode (BulletListItem)) _) = True
+listItemInGroup (Node (BlockNode (OrderedListItem)) _) = True
+listItemInGroup _ = False
 
 treeToPandocBlocks :: Tree DocNode -> Either PandocError Pandoc.Blocks
 treeToPandocBlocks tree = sequenceA (foldTree treeNodeToPandocBlock tree) >>= getBlockSeq
 
-getBlockSeq :: [BlockOrInlines] -> Either PandocError Pandoc.Blocks
-getBlockSeq = fmap Pandoc.fromList . traverse assertBlock
-
 data BlockOrInlines = BlockElement Pandoc.Block | InlineElement Pandoc.Inlines
-
-assertBlock :: BlockOrInlines -> Either PandocError Pandoc.Block
-assertBlock (BlockElement block) = Right block
-assertBlock (InlineElement _) = Left $ PandocSyntaxMapError "Error in mapping: found orphan inline node"
-
-assertInlines :: BlockOrInlines -> Either PandocError Pandoc.Inlines
-assertInlines (BlockElement _) = Left $ PandocSyntaxMapError "Error in mapping: found block node in inline node slot"
-assertInlines (InlineElement inlines) = Right $ inlines
 
 treeNodeToPandocBlock :: DocNode -> [[Either PandocError BlockOrInlines]] -> [Either PandocError BlockOrInlines]
 treeNodeToPandocBlock node childrenNodes = case node of
@@ -172,17 +176,13 @@ treeNodeToPandocBlock node childrenNodes = case node of
     firstInline :: Pandoc.Inlines -> Maybe Pandoc.Inline
     firstInline = firstValue
 
-convertTextSpan :: Automerge.TextSpan -> Pandoc.Inlines
-convertTextSpan = convertMarksToInlines <*> convertTextToInlines
+getBlockSeq :: [BlockOrInlines] -> Either PandocError Pandoc.Blocks
+getBlockSeq = fmap Pandoc.fromList . traverse assertBlock
 
-convertTextToInlines :: Automerge.TextSpan -> Pandoc.Inlines
-convertTextToInlines = Pandoc.str . value
+assertBlock :: BlockOrInlines -> Either PandocError Pandoc.Block
+assertBlock (BlockElement block) = Right block
+assertBlock (InlineElement _) = Left $ PandocSyntaxMapError "Error in mapping: found orphan inline node"
 
-convertMarksToInlines :: Automerge.TextSpan -> Pandoc.Inlines -> Pandoc.Inlines
-convertMarksToInlines textSpan inlines = foldl' (flip markToInlines) inlines $ marks textSpan
-
-markToInlines :: Automerge.Mark -> Pandoc.Inlines -> Pandoc.Inlines
-markToInlines mark = case mark of
-  Automerge.Strong -> Pandoc.strong
-  Automerge.Emphasis -> Pandoc.emph
-  Automerge.LinkMark automergeLink -> Pandoc.link (url automergeLink) (title automergeLink)
+assertInlines :: BlockOrInlines -> Either PandocError Pandoc.Inlines
+assertInlines (BlockElement _) = Left $ PandocSyntaxMapError "Error in mapping: found block node in inline node slot"
+assertInlines (InlineElement inlines) = Right $ inlines
