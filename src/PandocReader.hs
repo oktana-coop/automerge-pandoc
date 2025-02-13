@@ -145,7 +145,7 @@ treeNodeToPandocBlock node childrenNodes = case node of
     Right inlines -> case firstInline inlines of
       Just (Str text) -> [Right $ BlockElement $ Pandoc.CodeBlock attr text]
       _ -> [Left $ PandocSyntaxMapError "Error in mapping: Could not extract code block text"]
-  (BlockNode (BulletListItem)) -> wrapInlinesToPlain $ concat childrenNodes
+  (BlockNode (BulletListItem)) -> wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes
   (BlockNode (OrderedListItem)) -> wrapInlinesToPlain $ concat childrenNodes
   (BlockNode (PandocBlock (Pandoc.BulletList _))) -> case mapToChildBlocks childrenNodes of
     Left err -> [Left err]
@@ -157,11 +157,19 @@ treeNodeToPandocBlock node childrenNodes = case node of
   -- TODO: Remove when all block types are handled
   _ -> undefined
   where
+    concatInlines :: [Either PandocError Pandoc.Inlines] -> Either PandocError Pandoc.Inlines
+    concatInlines eitherInlines = fmap mconcat $ sequenceA eitherInlines
+
     concatChildrenInlines :: [[Either PandocError BlockOrInlines]] -> Either PandocError Pandoc.Inlines
     concatChildrenInlines children = concatInlines $ map (>>= assertInlines) $ concat children
+
+    concatAdjacentInlines :: [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
+    concatAdjacentInlines = foldr mergeOrAppendAdjacent []
       where
-        concatInlines :: [Either PandocError Pandoc.Inlines] -> Either PandocError Pandoc.Inlines
-        concatInlines eitherInlines = fmap mconcat $ sequenceA eitherInlines
+        mergeOrAppendAdjacent :: Either PandocError BlockOrInlines -> [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
+        mergeOrAppendAdjacent x [] = [x]
+        mergeOrAppendAdjacent (Right (InlineElement currentInlines)) (Right (InlineElement firstOfRestInlines) : rest) = (Right (InlineElement (currentInlines <> firstOfRestInlines)) : rest)
+        mergeOrAppendAdjacent x rest = (x : rest)
 
     wrapInlinesToPlain :: [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
     wrapInlinesToPlain eitherInlines = (fmap . fmap) wrapInlines eitherInlines
