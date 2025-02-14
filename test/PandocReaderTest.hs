@@ -2,8 +2,8 @@
 
 module PandocReaderTest (tests) where
 
-import Automerge as A (BlockType (UnorderedListItemType), Mark (..))
-import AutomergeTestUtils as Automerge (emphasisTextSpan, heading1Span, linkTextSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
+import Automerge as A (BlockType (OrderedListItemType, UnorderedListItemType), Mark (..))
+import AutomergeTestUtils as Automerge (emphasisTextSpan, heading1Span, heading4Span, linkTextSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
 import PandocReader (toPandoc)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Tasty (TestTree, testGroup)
@@ -144,7 +144,7 @@ spec = do
                 [ toList $ Pandoc.header 1 $ Pandoc.str "A Heading 1",
                   toList $ Pandoc.para $ Pandoc.str "Paragraph above the list",
                   -- using `Plain` pandoc blocks for list item text spans
-                  toList $ Pandoc.bulletList [plain $ str "List item 1", plain $ str "List item 2"],
+                  toList $ Pandoc.bulletList [Pandoc.plain $ Pandoc.str "List item 1", Pandoc.plain $ Pandoc.str "List item 2"],
                   toList $ Pandoc.para $ Pandoc.str "Paragraph below the list"
                 ]
 
@@ -173,7 +173,41 @@ spec = do
                 [ toList $ Pandoc.header 1 $ Pandoc.str "A Heading 1",
                   toList $ Pandoc.para $ Pandoc.str "Paragraph above the list",
                   -- using `Plain` pandoc blocks for list item text spans
-                  toList $ Pandoc.orderedList [plain $ str "List item 1", plain $ str "List item 2"],
+                  toList $ Pandoc.orderedList [Pandoc.plain $ Pandoc.str "List item 1", Pandoc.plain $ Pandoc.str "List item 2"],
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph below the list"
+                ]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "returns list item text that includes marks in a single Pandoc `Plain` block" $ do
+      let input =
+            [ Automerge.heading1Span [],
+              Automerge.textSpan "A Heading 1",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph above the list",
+              Automerge.unorderedListItemSpan [],
+              Automerge.textSpan "List item 1 with some ",
+              Automerge.strongTextSpan "strong text",
+              Automerge.unorderedListItemSpan [],
+              Automerge.textSpan "List item 2 with a ",
+              Automerge.linkTextSpan "link" "https://automerge.org/" "Automerge",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph below the list"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $ Pandoc.header 1 $ Pandoc.str "A Heading 1",
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph above the list",
+                  toList $
+                    Pandoc.bulletList
+                      [ Pandoc.plain (Pandoc.str "List item 1 with some " <> (Pandoc.strong $ Pandoc.str "strong text")),
+                        Pandoc.plain (Pandoc.str "List item 2 with a " <> (Pandoc.link "https://automerge.org/" "Automerge" $ str "link"))
+                      ],
                   toList $ Pandoc.para $ Pandoc.str "Paragraph below the list"
                 ]
 
@@ -209,16 +243,83 @@ spec = do
                   toList $ Pandoc.para $ Pandoc.str "Paragraph above the list",
                   toList $
                     Pandoc.bulletList
-                      [ ( (plain $ str "List item 1")
+                      [ ( (Pandoc.plain $ str "List item 1")
                             <> ( Pandoc.bulletList
-                                   [ plain $ str "List item 1.1",
-                                     plain $ str "List item 1.2"
+                                   [ Pandoc.plain $ Pandoc.str "List item 1.1",
+                                     Pandoc.plain $ Pandoc.str "List item 1.2"
+                                   ]
+                               )
+                        ),
+                        ( (Pandoc.plain $ Pandoc.str "List item 2")
+                            <> ( Pandoc.bulletList
+                                   [Pandoc.plain $ Pandoc.str "List item 2.1"]
+                               )
+                        )
+                      ],
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph below the list"
+                ]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles nested lists with child blocks and two levels of nesting" $ do
+      let input =
+            [ Automerge.heading1Span [],
+              Automerge.textSpan "A Heading 1",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph above the list",
+              Automerge.orderedListItemSpan [],
+              Automerge.textSpan "List item 1",
+              Automerge.heading4Span [A.OrderedListItemType],
+              Automerge.textSpan "Heading 4 inside a list item",
+              Automerge.orderedListItemSpan [A.OrderedListItemType],
+              Automerge.textSpan "List item 1.1",
+              Automerge.orderedListItemSpan [A.OrderedListItemType, A.OrderedListItemType],
+              Automerge.textSpan "List item 1.1.1",
+              Automerge.paragraphSpan [A.OrderedListItemType, A.OrderedListItemType, A.OrderedListItemType],
+              Automerge.textSpan "Paragraph nested 3 levels deep",
+              Automerge.orderedListItemSpan [A.OrderedListItemType],
+              Automerge.textSpan "List item 1.2",
+              Automerge.orderedListItemSpan [],
+              Automerge.textSpan "List item 2",
+              Automerge.orderedListItemSpan [A.OrderedListItemType],
+              Automerge.textSpan "List item 2.1",
+              Automerge.paragraphSpan [A.OrderedListItemType, A.OrderedListItemType],
+              Automerge.textSpan "Paragraph nested 2 levels deep",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph below the list"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $ Pandoc.header 1 $ Pandoc.str "A Heading 1",
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph above the list",
+                  toList $
+                    Pandoc.orderedList
+                      [ ( (plain $ str "List item 1")
+                            <> (Pandoc.header 4 $ Pandoc.str "Heading 4 inside a list item")
+                            <> ( Pandoc.orderedList
+                                   [ ( (Pandoc.plain $ Pandoc.str "List item 1.1")
+                                         <> Pandoc.orderedList
+                                           [ ( (Pandoc.plain $ Pandoc.str "List item 1.1.1")
+                                                 <> (Pandoc.para $ Pandoc.str "Paragraph nested 3 levels deep")
+                                             )
+                                           ]
+                                     ),
+                                     Pandoc.plain $ Pandoc.str "List item 1.2"
                                    ]
                                )
                         ),
                         ( (plain $ str "List item 2")
-                            <> ( Pandoc.bulletList
-                                   [plain $ str "List item 2.1"]
+                            <> ( Pandoc.orderedList
+                                   [ ( ( Pandoc.plain $ Pandoc.str "List item 2.1"
+                                       )
+                                         <> (Pandoc.para $ Pandoc.str "Paragraph nested 2 levels deep")
+                                     )
+                                   ]
                                )
                         )
                       ],
