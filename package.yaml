@@ -74,3 +74,4 @@ tests:
       - pandoc-types >= 1.23.1
       - tasty >= 1.5.3
       - tasty-hspec >= 1.2.0.4
+      - text >= 2.1.1
