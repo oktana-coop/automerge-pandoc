@@ -14,6 +14,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Utils.JSON (parseNonEmpty, parseStringifiedObject, stringifyObject)
 
+-- TODO: Make title optional
 data Link = Link {url :: T.Text, title :: T.Text} deriving (Show, Eq)
 
 instance FromJSON Link where
