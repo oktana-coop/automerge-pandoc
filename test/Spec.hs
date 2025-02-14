@@ -1,2 +1,7 @@
+import PandocReaderTest as Reader (tests)
+import Test.Tasty (defaultMain, testGroup)
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = do
+  readerTests <- Reader.tests
+  defaultMain $ testGroup "Tests" [readerTests]

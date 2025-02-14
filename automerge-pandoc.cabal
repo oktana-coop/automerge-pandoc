@@ -67,11 +67,17 @@ test-suite automerge-pandoc-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      PandocReaderTest
       Paths_automerge_pandoc
   hs-source-dirs:
       test
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       automerge-pandoc
     , base >=4.7 && <5
+    , hspec >=2.11.10
+    , pandoc >=3.5
+    , pandoc-types >=1.23.1
+    , tasty >=1.5.3
+    , tasty-hspec >=1.2.0.4
   default-language: Haskell2010
