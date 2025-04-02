@@ -7,22 +7,24 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import PandocReader (toPandoc)
 import PandocWriter (writeAutomergeSpans)
-import Text.Pandoc (Pandoc, PandocIO, PandocMonad, ReaderOptions, WriterOptions, def, readHtml, readMarkdown, readNative)
+import Text.Pandoc (Pandoc, PandocIO, PandocMonad, ReaderOptions, WriterOptions, def, readHtml, readJSON, readMarkdown, readNative)
 import Text.Pandoc.Class (runIO)
 import Text.Pandoc.Error (handleError)
-import Text.Pandoc.Writers (writeHtml5String, writeMarkdown, writeNative)
+import Text.Pandoc.Writers (writeHtml5String, writeJSON, writeMarkdown, writeNative)
 
 writeTo :: (PandocMonad m) => Format -> WriterOptions -> Pandoc -> m T.Text
 writeTo format = case format of
   Cli.Pandoc -> writeNative
   Cli.Markdown -> writeMarkdown
   Cli.Html -> writeHtml5String
+  Cli.Json -> writeJSON
 
 readFrom :: Format -> ReaderOptions -> T.Text -> PandocIO Pandoc
 readFrom format = case format of
   Cli.Pandoc -> readNative
   Cli.Markdown -> readMarkdown
   Cli.Html -> readHtml
+  Cli.Json -> readJSON
 
 convertFromAutomerge :: Format -> String -> IO ()
 convertFromAutomerge format input = do

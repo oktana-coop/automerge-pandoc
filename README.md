@@ -42,24 +42,36 @@ stack exec automerge-pandoc fromAutomerge -- --to markdown AUTOMERGE_SPANS_JSON
 stack exec automerge-pandoc fromAutomerge -- --to html AUTOMERGE_SPANS_JSON
 ```
 
+#### To JSON
+
+```
+stack exec automerge-pandoc fromAutomerge -- --to json AUTOMERGE_SPANS_JSON
+```
+
 ### Convert to Automerge Spans
 
-#### To Pandoc AST
+#### From Pandoc AST
 
 ```
 stack exec automerge-pandoc toAutomerge -- --from pandoc PANDOC_AST
 ```
 
-#### To Markdown
+#### From Markdown
 
 ```
 stack exec automerge-pandoc toAutomerge -- --from markdown MARKDOWN_STRING
 ```
 
-#### To HTML
+#### From HTML
 
 ```
 stack exec automerge-pandoc toAutomerge -- --from html HTML_STRING
+```
+
+#### From JSON
+
+```
+stack exec automerge-pandoc toAutomerge -- --from json JSON_STRING
 ```
 
 ## Build for WebAssembly
