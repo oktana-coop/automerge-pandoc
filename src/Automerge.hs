@@ -3,7 +3,7 @@
 
 module Automerge (parseAutomergeSpans, parseAutomergeSpansText, Span (..), BlockMarker (..), Heading (..), HeadingLevel (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
 
-import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, String), eitherDecode, eitherDecodeStrictText, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
+import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, Null, String), eitherDecode, eitherDecodeStrictText, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types (Parser)
@@ -143,7 +143,9 @@ parseInline v = do
   pure $ TextSpan $ AutomergeText parsedValue parsedMarks
 
 parseMarks :: KM.KeyMap Value -> Parser [Mark]
-parseMarks = mapM parseMark . KM.toList
+parseMarks = mapM parseMark . filterNonNull . KM.toList
+  where
+    filterNonNull = filter (\(_, v) -> v /= Null)
 
 parseMark :: (K.Key, Value) -> Parser Mark
 parseMark (k, String txt)
