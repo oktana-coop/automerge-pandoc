@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module PandocReader (toPandoc) where
+module PandocReader (toPandoc, readAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), isParent, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling)
+import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), isParent, parseAutomergeSpansText, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling)
+import Control.Monad ((>=>))
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
 import Data.List.NonEmpty (NonEmpty (..), nonEmpty, toList)
@@ -10,7 +11,7 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Data.Tree (Tree (Node), drawTree, foldTree, unfoldForest)
 import Debug.Trace
-import Text.Pandoc (PandocError (PandocSyntaxMapError))
+import Text.Pandoc (PandocError (PandocParseError, PandocSyntaxMapError), ReaderOptions)
 import Text.Pandoc.Builder as Pandoc
   ( Block (..),
     Blocks,
@@ -29,7 +30,25 @@ import Text.Pandoc.Builder as Pandoc
     toList,
   )
 import Text.Pandoc.Class (PandocMonad)
+import Text.Pandoc.Sources (ToSources, sourcesToText, toSources)
 import Utils.Sequence (firstValue)
+
+-- Althout ReaderOptions are not used, the function is written like this so that it's consistent with the other Pandoc reader functions.
+readAutomerge :: (PandocMonad m, ToSources a) => ReaderOptions -> a -> m Pandoc
+readAutomerge _ =
+  -- Using Kleisli composition to compose the 2 smaller functions in the monadic context (PandocMonad)
+  parseSpansAndHandleErrors >=> toPandoc
+  where
+    -- Here we parse the JSON Automerge spans but also convert a potential error to a Pandoc parsing error
+    -- The result is a list of Automerge spans wrapped within a Pandoc monad.
+    parseSpansAndHandleErrors :: (ToSources a, PandocMonad m) => a -> m [Automerge.Span]
+    parseSpansAndHandleErrors = either handleParsingErrorMessage pure . parseSpans
+
+    parseSpans :: (ToSources a) => a -> Either String [Span]
+    parseSpans = parseAutomergeSpansText . sourcesToText . toSources
+
+    handleParsingErrorMessage :: (PandocMonad m) => String -> m a
+    handleParsingErrorMessage = throwError . PandocParseError . T.pack
 
 toPandoc :: (PandocMonad m) => [Automerge.Span] -> m Pandoc.Pandoc
 toPandoc = (either throwError (pure . Pandoc.doc)) . convertSpansToBlocks

@@ -1,4 +1,4 @@
-module PandocWriter (writeAutomergeSpans) where
+module PandocWriter (writeAutomerge) where
 
 import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), toJSONText)
 import qualified Data.Text as T
@@ -12,8 +12,8 @@ toAutomergeBlockType :: ContainerBlockType -> BlockType
 toAutomergeBlockType BulletListItem = Automerge.UnorderedListItemType
 toAutomergeBlockType OrderedListItem = Automerge.OrderedListItemType
 
-writeAutomergeSpans :: (PandocMonad m) => WriterOptions -> Pandoc.Pandoc -> m T.Text
-writeAutomergeSpans _ (Pandoc.Pandoc _ blocks) = pure $ toJSONText $ blocksToAutomergeSpans blocks
+writeAutomerge :: (PandocMonad m) => WriterOptions -> Pandoc.Pandoc -> m T.Text
+writeAutomerge _ (Pandoc.Pandoc _ blocks) = pure $ toJSONText $ blocksToAutomergeSpans blocks
 
 blocksToAutomergeSpans :: [Pandoc.Block] -> [Automerge.Span]
 blocksToAutomergeSpans = concatMap $ blockToAutomergeSpans []

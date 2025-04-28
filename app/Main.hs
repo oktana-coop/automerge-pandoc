@@ -1,12 +1,10 @@
 module Main (main) where
 
-import Automerge (parseAutomergeSpans)
 import Cli (Command (..), Format (..), readInputCommand)
-import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
-import PandocReader (toPandoc)
-import PandocWriter (writeAutomergeSpans)
+import PandocReader (readAutomerge)
+import PandocWriter (writeAutomerge)
 import Text.Pandoc (Pandoc, PandocIO, PandocMonad, ReaderOptions, WriterOptions, def, readHtml, readJSON, readMarkdown, readNative)
 import Text.Pandoc.Class (runIO)
 import Text.Pandoc.Error (handleError)
@@ -18,6 +16,7 @@ writeTo format = case format of
   Cli.Markdown -> writeMarkdown
   Cli.Html -> writeHtml5String
   Cli.Json -> writeJSON
+  Cli.Automerge -> writeAutomerge
 
 readFrom :: Format -> ReaderOptions -> T.Text -> PandocIO Pandoc
 readFrom format = case format of
@@ -25,26 +24,21 @@ readFrom format = case format of
   Cli.Markdown -> readMarkdown
   Cli.Html -> readHtml
   Cli.Json -> readJSON
+  Cli.Automerge -> readAutomerge
 
-convertFromAutomerge :: Format -> String -> IO ()
-convertFromAutomerge format input = do
-  let automergeSpans = parseAutomergeSpans $ BL.pack input
-  case automergeSpans of
-    Left err -> putStrLn $ "Error: " ++ err
-    Right spans -> do
-      result <- runIO $ do
-        doc <- toPandoc spans
-        writeTo format def doc
-      rst <- handleError result
-      TIO.putStrLn rst
-
-convertToAutomerge :: Format -> String -> IO ()
-convertToAutomerge format input = do
+convert :: Format -> Format -> String -> IO ()
+convert inputFormat outputFormat input = do
   result <- runIO $ do
-    doc <- readFrom format def (T.pack input)
-    writeAutomergeSpans def doc
+    doc <- readFrom inputFormat def (T.pack input)
+    writeTo outputFormat def doc
   rst <- handleError result
   TIO.putStrLn rst
+
+convertFromAutomerge :: Format -> String -> IO ()
+convertFromAutomerge outputFormat = convert Automerge outputFormat
+
+convertToAutomerge :: Format -> String -> IO ()
+convertToAutomerge inputFormat = convert inputFormat Automerge
 
 main :: IO ()
 main = do

@@ -7,7 +7,7 @@ data Command
   | ConvertToAutomerge Format String
   deriving (Show)
 
-data Format = Pandoc | Markdown | Html | Json deriving (Show)
+data Format = Pandoc | Markdown | Html | Json | Automerge deriving (Show)
 
 outputFormatParser :: Parser Format
 outputFormatParser = option readFormat (long "to" <> metavar "FORMAT" <> help "Specify the format (pandoc, markdown, html, json)")
@@ -22,6 +22,7 @@ readFormat = eitherReader $ \arg ->
     "markdown" -> Right Markdown
     "html" -> Right Html
     "json" -> Right Json
+    "automerge" -> Right Automerge
     _ -> Left $ "Unknown format: " ++ arg
 
 commandParser :: Parser Command
