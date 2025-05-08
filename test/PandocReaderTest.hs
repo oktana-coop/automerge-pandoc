@@ -115,7 +115,35 @@ spec = do
               concat
                 -- TODO: There is no order in automerge marks but here the marks are inverted and it should be
                 -- understood and investigated why this happens.
-                [ toList $ Pandoc.para $ Pandoc.link "https://automerge.org/" "Automerge" $ str "Automerge"
+                [ toList $ Pandoc.para $ Pandoc.link "https://automerge.org/" "Automerge" $ Pandoc.str "Automerge"
+                ]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles text that is partially covered with marks" $ do
+      let input =
+            [ Automerge.paragraphSpan [],
+              Automerge.textSpan "Some plain text followed by ",
+              Automerge.strongTextSpan "strong text",
+              Automerge.textSpan " and a link: ",
+              Automerge.linkTextSpan "Automerge" "https://automerge.org/" "Automerge"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $
+                    Pandoc.para $
+                      fromList $
+                        concat
+                          [ toList $ Pandoc.str "Some plain text followed by ",
+                            toList $ Pandoc.strong $ Pandoc.str "strong text",
+                            toList $ Pandoc.str " and a link: ",
+                            toList $ Pandoc.link "https://automerge.org/" "Automerge" $ Pandoc.str "Automerge"
+                          ]
                 ]
 
       result <- runIO $ toPandoc input
@@ -315,8 +343,7 @@ spec = do
                         ),
                         ( (plain $ str "List item 2")
                             <> ( Pandoc.orderedList
-                                   [ ( ( Pandoc.plain $ Pandoc.str "List item 2.1"
-                                       )
+                                   [ ( (Pandoc.plain $ Pandoc.str "List item 2.1")
                                          <> (Pandoc.para $ Pandoc.str "Paragraph nested 2 levels deep")
                                      )
                                    ]
