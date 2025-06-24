@@ -1,4 +1,4 @@
-module AutomergeTestUtils (paragraphSpan, heading1Span, heading2Span, heading3Span, heading4Span, heading5Span, heading6Span, textSpan, strongTextSpan, emphasisTextSpan, textSpanWithMarks, linkTextSpan, codeBlockSpan, orderedListItemSpan, unorderedListItemSpan) where
+module AutomergeTestUtils (paragraphSpan, heading1Span, heading2Span, heading3Span, heading4Span, heading5Span, heading6Span, textSpan, strongTextSpan, emphasisTextSpan, codeTextSpan, textSpanWithMarks, linkTextSpan, codeBlockSpan, orderedListItemSpan, unorderedListItemSpan) where
 
 import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..))
 import qualified Data.Text as T
@@ -35,6 +35,9 @@ emphasisTextSpan str = TextSpan $ AutomergeText (T.pack str) [Emphasis]
 
 linkTextSpan :: String -> String -> String -> Span
 linkTextSpan txt linkUrl linkTitle = TextSpan $ AutomergeText (T.pack txt) [LinkMark $ Link (T.pack linkUrl) (T.pack linkTitle)]
+
+codeTextSpan :: String -> Span
+codeTextSpan str = TextSpan $ AutomergeText (T.pack str) [Code]
 
 textSpanWithMarks :: String -> [Mark] -> Span
 textSpanWithMarks str spanMarks = TextSpan $ AutomergeText (T.pack str) spanMarks
