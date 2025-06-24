@@ -63,6 +63,7 @@ inlineToTextSpan inline = case inline of
   Pandoc.Strong inlines -> addMark Automerge.Strong inlines
   Pandoc.Emph inlines -> addMark Automerge.Emphasis inlines
   Pandoc.Link _ inlines (linkUrl, linkTitle) -> addMark (Automerge.LinkMark $ Automerge.Link {url = linkUrl, title = linkTitle}) inlines
+  Pandoc.Code _ text -> [AutomergeText text [Automerge.Code]]
   -- TODO: Handle other inline elements
   _ -> []
 

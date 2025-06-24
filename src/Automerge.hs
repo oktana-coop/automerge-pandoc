@@ -30,6 +30,7 @@ data Mark
   = Strong
   | Emphasis
   | LinkMark Link
+  | Code
   deriving (Show, Eq)
 
 newtype HeadingLevel = HeadingLevel Int deriving (Show, Eq)
@@ -153,6 +154,7 @@ parseMark (k, String txt)
 parseMark (k, Bool True) = case K.toText k of
   "strong" -> pure Strong
   "em" -> pure Emphasis
+  "__ext__code" -> pure Code
   _ -> fail $ "Unexpected mark with boolean value: " ++ T.unpack (K.toText k)
 parseMark _ = fail "Invalid format in marks"
 
@@ -252,6 +254,7 @@ instance ToJSON Span where
         Strong -> (K.fromText "strong", Bool True)
         Emphasis -> (K.fromText "em", Bool True)
         LinkMark link -> (K.fromText "link", String $ stringifyObject link)
+        Code -> (K.fromText "__ext__code", Bool True)
 
 toJSONText :: [Span] -> T.Text
 toJSONText = decodeUtf8 . BSL8.toStrict . encode

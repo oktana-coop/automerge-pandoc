@@ -20,6 +20,7 @@ import Text.Pandoc.Builder as Pandoc
     ListNumberDelim (DefaultDelim),
     ListNumberStyle (DefaultStyle),
     Pandoc,
+    code,
     doc,
     emph,
     fromList,
@@ -114,6 +115,10 @@ markToInlines mark = case mark of
   Automerge.Strong -> Pandoc.strong
   Automerge.Emphasis -> Pandoc.emph
   Automerge.LinkMark automergeLink -> Pandoc.link (url automergeLink) (title automergeLink)
+  Automerge.Code -> Pandoc.code . concatStrInlines
+    where
+      concatStrInlines :: Inlines -> T.Text
+      concatStrInlines inlines = T.concat [t | Pandoc.Str t <- Pandoc.toList inlines]
 
 groupListItems :: Tree DocNode -> Tree DocNode
 groupListItems = foldTree addListNodes

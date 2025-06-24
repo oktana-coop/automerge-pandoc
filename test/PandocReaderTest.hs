@@ -3,12 +3,12 @@
 module PandocReaderTest (tests) where
 
 import Automerge as A (BlockType (OrderedListItemType, UnorderedListItemType), Mark (..))
-import AutomergeTestUtils as Automerge (emphasisTextSpan, heading1Span, heading4Span, linkTextSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
+import AutomergeTestUtils as Automerge (codeTextSpan, emphasisTextSpan, heading1Span, heading4Span, linkTextSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
 import PandocReader (toPandoc)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hspec (testSpec)
-import Text.Pandoc.Builder as Pandoc (bulletList, doc, emph, fromList, header, link, orderedList, para, plain, str, strong, toList)
+import Text.Pandoc.Builder as Pandoc (bulletList, code, doc, emph, fromList, header, link, orderedList, para, plain, str, strong, toList)
 import Text.Pandoc.Class (runIO)
 
 tests :: IO TestTree
@@ -116,6 +116,23 @@ spec = do
                 -- TODO: There is no order in automerge marks but here the marks are inverted and it should be
                 -- understood and investigated why this happens.
                 [ toList $ Pandoc.para $ Pandoc.link "https://automerge.org/" "Automerge" $ Pandoc.str "Automerge"
+                ]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles inline code" $ do
+      let input =
+            [ Automerge.paragraphSpan [],
+              Automerge.codeTextSpan "func1"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $ Pandoc.para $ Pandoc.code "func1"
                 ]
 
       result <- runIO $ toPandoc input
