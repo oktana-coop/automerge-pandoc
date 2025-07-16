@@ -34,7 +34,7 @@ import Text.Pandoc.Class (PandocMonad)
 import Text.Pandoc.Sources (ToSources, sourcesToText, toSources)
 import Utils.Sequence (firstValue)
 
--- Althout ReaderOptions are not used, the function is written like this so that it's consistent with the other Pandoc reader functions.
+-- Although ReaderOptions are not used, the function is written like this so that it's consistent with the other Pandoc reader functions.
 readAutomerge :: (PandocMonad m, ToSources a) => ReaderOptions -> a -> m Pandoc
 readAutomerge _ =
   -- Using Kleisli composition to compose the 2 smaller functions in the monadic context (PandocMonad)
@@ -99,6 +99,7 @@ buildBlockNode blockMarker = case blockMarker of
   Automerge.CodeBlockMarker -> PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
   Automerge.UnorderedListItemMarker -> BulletListItem
   Automerge.OrderedListItemMarker -> OrderedListItem
+  Automerge.BlockQuoteMarker -> PandocBlock $ Pandoc.BlockQuote []
   _ -> undefined -- more blocks to be implemented
 
 convertTextSpan :: Automerge.TextSpan -> Pandoc.Inlines
@@ -171,6 +172,7 @@ treeNodeToPandocBlock node childrenNodes = case node of
   (BlockNode (OrderedListItem)) -> wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes
   (BlockNode (PandocBlock (Pandoc.BulletList _))) -> [fmap (BlockElement . Pandoc.BulletList) (mapToChildBlocks childrenNodes)]
   (BlockNode (PandocBlock (Pandoc.OrderedList attrs _))) -> [fmap (BlockElement . Pandoc.OrderedList attrs) (mapToChildBlocks childrenNodes)]
+  (BlockNode (PandocBlock (Pandoc.BlockQuote _))) -> [fmap (BlockElement . Pandoc.BlockQuote) (traverseAssertingChildIsBlock . wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes)]
   (InlineNode inlines) -> [Right $ InlineElement inlines]
   -- TODO: Remove when all block types are handled
   _ -> undefined
@@ -199,6 +201,9 @@ treeNodeToPandocBlock node childrenNodes = case node of
 
     mapToChildBlocks :: [[Either PandocError BlockOrInlines]] -> Either PandocError [[Pandoc.Block]]
     mapToChildBlocks children = (traverse . traverse) (>>= assertBlock) children
+
+    traverseAssertingChildIsBlock :: [Either PandocError BlockOrInlines] -> Either PandocError [Pandoc.Block]
+    traverseAssertingChildIsBlock children = traverse (>>= assertBlock) children
 
     firstInline :: Pandoc.Inlines -> Maybe Pandoc.Inline
     firstInline = firstValue

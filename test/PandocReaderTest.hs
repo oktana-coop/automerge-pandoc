@@ -2,13 +2,13 @@
 
 module PandocReaderTest (tests) where
 
-import Automerge as A (BlockType (OrderedListItemType, UnorderedListItemType), Mark (..))
-import AutomergeTestUtils as Automerge (codeTextSpan, emphasisTextSpan, heading1Span, heading4Span, linkTextSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
+import Automerge as A (BlockType (BlockQuoteType, OrderedListItemType, UnorderedListItemType), Mark (..))
+import AutomergeTestUtils as Automerge (blockQuoteSpan, codeTextSpan, emphasisTextSpan, heading1Span, heading2Span, heading4Span, linkTextSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
 import PandocReader (toPandoc)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hspec (testSpec)
-import Text.Pandoc.Builder as Pandoc (bulletList, code, doc, emph, fromList, header, link, orderedList, para, plain, str, strong, toList)
+import Text.Pandoc.Builder as Pandoc (blockQuote, bulletList, code, doc, emph, fromList, header, link, orderedList, para, plain, str, strong, toList)
 import Text.Pandoc.Class (runIO)
 
 tests :: IO TestTree
@@ -368,6 +368,122 @@ spec = do
                         )
                       ],
                   toList $ Pandoc.para $ Pandoc.str "Paragraph below the list"
+                ]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+  describe "BlockQuote" $ do
+    it "handles a blockquote with nested paragraphs" $ do
+      let input =
+            [ Automerge.heading1Span [],
+              Automerge.textSpan "A Heading 1",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph above the blockquote",
+              Automerge.blockQuoteSpan [],
+              Automerge.paragraphSpan [A.BlockQuoteType],
+              Automerge.textSpan "Ticking away the moments that make up a dull day",
+              Automerge.paragraphSpan [A.BlockQuoteType],
+              Automerge.textSpan "You fritter and waste the hours in an offhand way",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph below the blockquote"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $ Pandoc.header 1 $ Pandoc.str "A Heading 1",
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph above the blockquote",
+                  toList $
+                    Pandoc.blockQuote $
+                      fromList $
+                        concat $
+                          [ toList $ (Pandoc.para $ str "Ticking away the moments that make up a dull day"),
+                            toList $ (Pandoc.para $ str "You fritter and waste the hours in an offhand way")
+                          ],
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph below the blockquote"
+                ]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "wraps a text span just after the blockquote in a Plain block" $ do
+      let input =
+            [ Automerge.heading1Span [],
+              Automerge.textSpan "A Heading 1",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph above the blockquote",
+              Automerge.blockQuoteSpan [],
+              Automerge.textSpan "Ticking away the moments that make up a dull day",
+              Automerge.paragraphSpan [A.BlockQuoteType],
+              Automerge.textSpan "You fritter and waste the hours in an offhand way",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph below the blockquote"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $ Pandoc.header 1 $ Pandoc.str "A Heading 1",
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph above the blockquote",
+                  toList $
+                    Pandoc.blockQuote $
+                      fromList $
+                        concat $
+                          [ toList $ (Pandoc.plain $ str "Ticking away the moments that make up a dull day"),
+                            toList $ (Pandoc.para $ str "You fritter and waste the hours in an offhand way")
+                          ],
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph below the blockquote"
+                ]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles a heading and marks inside the blockquote" $ do
+      let input =
+            [ Automerge.heading1Span [],
+              Automerge.textSpan "A Heading 1",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph above the blockquote",
+              Automerge.blockQuoteSpan [],
+              Automerge.heading2Span [A.BlockQuoteType],
+              Automerge.textSpan "Time",
+              Automerge.paragraphSpan [A.BlockQuoteType],
+              Automerge.strongTextSpan "Ticking away",
+              Automerge.textSpan " the moments that make up a dull day",
+              Automerge.paragraphSpan [A.BlockQuoteType],
+              Automerge.textSpan "You fritter and waste the hours in an offhand way",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Paragraph below the blockquote"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $ Pandoc.header 1 $ Pandoc.str "A Heading 1",
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph above the blockquote",
+                  toList $
+                    Pandoc.blockQuote $
+                      fromList $
+                        concat $
+                          [ toList $ Pandoc.header 2 $ Pandoc.str "Time",
+                            toList $
+                              ( Pandoc.para $
+                                  fromList $
+                                    concat
+                                      [ toList $ Pandoc.strong $ Pandoc.str "Ticking away",
+                                        toList $ Pandoc.str " the moments that make up a dull day"
+                                      ]
+                              ),
+                            toList $ (Pandoc.para $ str "You fritter and waste the hours in an offhand way")
+                          ],
+                  toList $ Pandoc.para $ Pandoc.str "Paragraph below the blockquote"
                 ]
 
       result <- runIO $ toPandoc input
