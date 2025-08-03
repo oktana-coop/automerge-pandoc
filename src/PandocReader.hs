@@ -90,6 +90,8 @@ getChildBlockSeeds blockSpan = addChildBlocks
   where
     addChildBlocks [] = []
     addChildBlocks (x : xs) = case x of
+      -- Note that we will enter this case even when `blockSpan` is `Nothing`.
+      -- In this case, `Automerge.isParent` will return true for the top-level blocks.
       Automerge.BlockSpan currentSpan | Automerge.isParent blockSpan currentSpan -> createChildBlockSeed currentSpan xs : addChildBlocks xs
       _ -> addChildBlocks xs
       where
