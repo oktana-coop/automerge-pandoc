@@ -7,6 +7,7 @@ import Control.Monad ((>=>))
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
 import Data.List.NonEmpty (NonEmpty (..), nonEmpty, toList)
+import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Data.Tree (Tree (Node), drawTree, foldTree, unfoldForest)
@@ -15,7 +16,7 @@ import Text.Pandoc (PandocError (PandocParseError, PandocSyntaxMapError), Reader
 import Text.Pandoc.Builder as Pandoc
   ( Block (..),
     Blocks,
-    Inline (Str),
+    Inline (Note, Str),
     Inlines,
     ListNumberDelim (DefaultDelim),
     ListNumberStyle (DefaultStyle),
@@ -26,6 +27,7 @@ import Text.Pandoc.Builder as Pandoc
     fromList,
     link,
     nullAttr,
+    singleton,
     str,
     strong,
     toList,
@@ -57,7 +59,7 @@ toPandoc = (either throwError (pure . Pandoc.doc)) . convertSpansToBlocks
     convertSpansToBlocks :: [Automerge.Span] -> Either PandocError Pandoc.Blocks
     convertSpansToBlocks = fromMaybe (Right $ Pandoc.fromList []) . fmap treeToPandocBlocks . buildTree
 
-newtype NoteId = NoteId T.Text deriving (Show, Eq)
+newtype NoteId = NoteId T.Text deriving (Show, Eq, Ord)
 
 data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem | NoteRef PandocReader.NoteId | NoteContent PandocReader.NoteId deriving (Show)
 
@@ -67,7 +69,7 @@ traceTree :: Tree DocNode -> Tree DocNode
 traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
 
 buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
-buildTree = (fmap (traceTree . groupListItems . buildRawTree)) . nonEmpty
+buildTree = (fmap (traceTree . mapNotesToPandocNotes . groupListItems . buildRawTree)) . nonEmpty
 
 buildRawTree :: NonEmpty Automerge.Span -> Tree DocNode
 buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSeeds spansList
@@ -159,6 +161,44 @@ listItemInGroup :: Tree DocNode -> Bool
 listItemInGroup (Node (BlockNode (BulletListItem)) _) = True
 listItemInGroup (Node (BlockNode (OrderedListItem)) _) = True
 listItemInGroup _ = False
+
+mapNotesToPandocNotes :: Tree DocNode -> Tree DocNode
+mapNotesToPandocNotes tree = pruneNonPandocNodeNotes $ replaceNoteRefsWithPandocNotes noteContentsMap tree
+  where
+    noteContentsMap = buildNoteContentsMap tree
+
+type NoteContentsMap = M.Map PandocReader.NoteId (Tree DocNode)
+
+buildNoteContentsMap :: Tree DocNode -> NoteContentsMap
+buildNoteContentsMap subtree@(Node node children) = case node of
+  BlockNode (NoteContent noteId) -> M.insert noteId subtree childMaps
+  _ -> childMaps
+  where
+    childMaps = M.unions (map buildNoteContentsMap children)
+
+replaceNoteRefsWithPandocNotes :: NoteContentsMap -> Tree DocNode -> Tree DocNode
+replaceNoteRefsWithPandocNotes noteContentsMap = replaceNoteRefs
+  where
+    replaceNoteRefs (Node (BlockNode (NoteRef noteId)) _) =
+      case M.lookup noteId noteContentsMap of
+        Just (Node _ noteContents) ->
+          Node (InlineNode (singleton $ Pandoc.Note [])) noteContents
+        Nothing ->
+          -- Leave as an orphan ref; will be pruned later
+          Node (BlockNode (NoteRef noteId)) []
+    -- Non-ref nodes remain the same
+    replaceNoteRefs node = node
+
+pruneNonPandocNodeNotes :: Tree DocNode -> Tree DocNode
+pruneNonPandocNodeNotes (Node node children) = Node node prunedChildren
+  where
+    prunedChildren = [pruneNonPandocNodeNotes child | child <- children, not (isNoteContentNode child || isNoteRefNode child)]
+      where
+        isNoteRefNode (Node (BlockNode (NoteRef _)) _) = True
+        isNoteRefNode _ = False
+
+        isNoteContentNode (Node (BlockNode (NoteContent _)) _) = True
+        isNoteContentNode _ = False
 
 treeToPandocBlocks :: Tree DocNode -> Either PandocError Pandoc.Blocks
 treeToPandocBlocks tree = sequenceA (foldTree treeNodeToPandocBlock tree) >>= getBlockSeq
