@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, parseAutomergeSpansText, Span (..), BlockMarker (..), Heading (..), HeadingLevel (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
+module Automerge (parseAutomergeSpans, parseAutomergeSpansText, Span (..), BlockMarker (..), Heading (..), HeadingLevel (..), NoteId (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
 
 import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, Null, String), eitherDecode, eitherDecodeStrictText, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
@@ -50,10 +50,6 @@ instance FromJSON NoteId where
   parseJSON = withText "NoteId" $ \t -> do
     noteId <- parseNonEmpty "id" t
     pure $ NoteId noteId
-
-newtype NoteRef = NoteRef NoteId deriving (Show, Eq)
-
-newtype NoteContent = NoteContent NoteId deriving (Show, Eq)
 
 data BlockType
   = ParagraphType

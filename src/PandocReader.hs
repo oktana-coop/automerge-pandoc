@@ -2,7 +2,7 @@
 
 module PandocReader (toPandoc, readAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), isParent, parseAutomergeSpansText, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling)
+import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isParent, parseAutomergeSpansText, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling)
 import Control.Monad ((>=>))
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
@@ -57,7 +57,9 @@ toPandoc = (either throwError (pure . Pandoc.doc)) . convertSpansToBlocks
     convertSpansToBlocks :: [Automerge.Span] -> Either PandocError Pandoc.Blocks
     convertSpansToBlocks = fromMaybe (Right $ Pandoc.fromList []) . fmap treeToPandocBlocks . buildTree
 
-data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem deriving (Show)
+newtype NoteId = NoteId T.Text deriving (Show, Eq)
+
+data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem | NoteRef PandocReader.NoteId | NoteContent PandocReader.NoteId deriving (Show)
 
 data DocNode = Root | BlockNode BlockNode | InlineNode Pandoc.Inlines deriving (Show)
 
@@ -100,6 +102,8 @@ buildBlockNode blockMarker = case blockMarker of
   Automerge.UnorderedListItemMarker -> BulletListItem
   Automerge.OrderedListItemMarker -> OrderedListItem
   Automerge.BlockQuoteMarker -> PandocBlock $ Pandoc.BlockQuote []
+  Automerge.NoteRefMarker (Automerge.NoteId noteId) -> NoteRef (PandocReader.NoteId noteId)
+  Automerge.NoteContentMarker (Automerge.NoteId noteId) -> NoteContent (PandocReader.NoteId noteId)
   _ -> undefined -- more blocks to be implemented
 
 convertTextSpan :: Automerge.TextSpan -> Pandoc.Inlines
