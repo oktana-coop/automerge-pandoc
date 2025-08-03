@@ -2,7 +2,7 @@
 
 module PandocReader (toPandoc, readAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isParent, parseAutomergeSpansText, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling)
+import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isParent, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
 import Control.Monad ((>=>))
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
@@ -77,11 +77,11 @@ buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSee
 
 buildDocNode :: (Automerge.Span, [Automerge.Span]) -> (DocNode, [(Automerge.Span, [Automerge.Span])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
-  (Automerge.BlockSpan blockSpan@(AutomergeBlock blockMarker _)) -> (BlockNode $ buildBlockNode blockMarker, getChildSeeds blockSpan remainingSpans)
+  (Automerge.BlockSpan blockSpan@(AutomergeBlock blockMarker _ _)) -> (BlockNode $ buildBlockNode blockMarker, getChildSeeds blockSpan remainingSpans)
   (Automerge.TextSpan textSpan) -> (InlineNode $ convertTextSpan textSpan, [])
 
 getChildSeeds :: Automerge.BlockSpan -> [Automerge.Span] -> [(Automerge.Span, [Automerge.Span])]
-getChildSeeds blockSpan = (addChildlessSeed . Automerge.takeUntilBlockSpan) <> (getChildBlockSeeds $ Just blockSpan)
+getChildSeeds blockSpan = (addChildlessSeed . Automerge.takeUntilNonEmbedBlockSpan) <> (getChildBlockSeeds $ Just blockSpan)
   where
     addChildlessSeed = map (\x -> (x, []))
 
