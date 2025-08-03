@@ -44,6 +44,17 @@ instance FromJSON HeadingLevel where
 
 newtype Heading = Heading HeadingLevel deriving (Show, Eq)
 
+newtype NoteId = NoteId T.Text deriving (Show, Eq)
+
+instance FromJSON NoteId where
+  parseJSON = withText "NoteId" $ \t -> do
+    noteId <- parseNonEmpty "id" t
+    pure $ NoteId noteId
+
+newtype NoteRef = NoteRef NoteId deriving (Show, Eq)
+
+newtype NoteContent = NoteContent NoteId deriving (Show, Eq)
+
 data BlockType
   = ParagraphType
   | HeadingType
@@ -52,6 +63,8 @@ data BlockType
   | OrderedListItemType
   | UnorderedListItemType
   | ImageType
+  | NoteRefType
+  | NoteContentType
   deriving (Show, Eq)
 
 instance FromJSON BlockType where
@@ -64,6 +77,8 @@ instance FromJSON BlockType where
     "ordered-list-item" -> pure OrderedListItemType
     "unordered-list-item" -> pure UnorderedListItemType
     "image" -> pure ImageType
+    "__ext__note_ref" -> pure NoteRefType
+    "__ext__note_content" -> pure NoteContentType
     _ -> fail "Invalid block type"
 
 instance ToJSON BlockType where
@@ -76,6 +91,8 @@ instance ToJSON BlockType where
     OrderedListItemType -> String "ordered-list-item"
     UnorderedListItemType -> String "unordered-list-item"
     ImageType -> String "image"
+    NoteRefType -> String "__ext__note_ref"
+    NoteContentType -> String "__ext__note_content"
 
 data BlockMarker
   = ParagraphMarker
@@ -85,6 +102,8 @@ data BlockMarker
   | OrderedListItemMarker
   | UnorderedListItemMarker
   | ImageBlockMarker
+  | NoteRefMarker NoteId
+  | NoteContentMarker NoteId
   deriving (Show, Eq)
 
 data TextSpan = AutomergeText {value :: T.Text, marks :: [Mark]} deriving (Show, Eq)
@@ -105,6 +124,8 @@ blockType (AutomergeBlock (BlockQuoteMarker) _) = BlockQuoteType
 blockType (AutomergeBlock (OrderedListItemMarker) _) = OrderedListItemType
 blockType (AutomergeBlock (UnorderedListItemMarker) _) = UnorderedListItemType
 blockType (AutomergeBlock (ImageBlockMarker) _) = ImageType
+blockType (AutomergeBlock (NoteRefMarker _) _) = NoteRefType
+blockType (AutomergeBlock (NoteContentMarker _) _) = NoteContentType
 
 data Span
   = BlockSpan BlockSpan
@@ -135,6 +156,14 @@ parseBlock v = do
     OrderedListItemType -> pure $ BlockSpan $ AutomergeBlock OrderedListItemMarker parents
     UnorderedListItemType -> pure $ BlockSpan $ AutomergeBlock UnorderedListItemMarker parents
     ImageType -> pure $ BlockSpan $ AutomergeBlock ImageBlockMarker parents
+    NoteRefType -> do
+      attrs <- blockData .: "attrs"
+      noteId <- attrs .: "noteId"
+      pure $ BlockSpan $ AutomergeBlock (NoteRefMarker noteId) parents
+    NoteContentType -> do
+      attrs <- blockData .: "attrs"
+      noteId <- attrs .: "noteId"
+      pure $ BlockSpan $ AutomergeBlock (NoteContentMarker noteId) parents
 
 parseInline :: Object -> Parser Span
 parseInline v = do
@@ -182,7 +211,7 @@ instance ToJSON Span where
         [ "type" .= T.pack "block",
           "value"
             .= object
-              [ "isEmbed" .= Bool False,
+              [ "isEmbed" .= Bool True,
                 "parents" .= parents,
                 "type" .= T.pack "heading",
                 "attrs" .= object ["level" .= level]
@@ -241,6 +270,28 @@ instance ToJSON Span where
                 "parents" .= parents,
                 "type" .= T.pack "image",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+              ]
+        ]
+    NoteRefMarker (NoteId noteId) ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= Bool True,
+                "parents" .= parents,
+                "type" .= T.pack "__ext__note_ref",
+                "attrs" .= object ["id" .= noteId]
+              ]
+        ]
+    NoteContentMarker (NoteId noteId) ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= Bool False,
+                "parents" .= parents,
+                "type" .= T.pack "__ext__note_content",
+                "attrs" .= object ["id" .= noteId]
               ]
         ]
   toJSON (TextSpan (AutomergeText val extractedMarks)) =
