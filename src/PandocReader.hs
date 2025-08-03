@@ -70,7 +70,10 @@ buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
 buildTree = (fmap (traceTree . groupListItems . buildRawTree)) . nonEmpty
 
 buildRawTree :: NonEmpty Automerge.Span -> Tree DocNode
-buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getChildBlockSeeds Nothing $ Data.List.NonEmpty.toList spans
+buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSeeds spansList
+  where
+    spansList = Data.List.NonEmpty.toList spans
+    getTopLevelBlockSeeds = getChildBlockSeeds Nothing
 
 buildDocNode :: (Automerge.Span, [Automerge.Span]) -> (DocNode, [(Automerge.Span, [Automerge.Span])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
