@@ -22,9 +22,9 @@ blocksToAutomergeSpans = concatMap $ blockToAutomergeSpans []
 blockToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Block -> [Automerge.Span]
 blockToAutomergeSpans parentBlockTypes block = case block of
   Pandoc.Plain inlines -> Automerge.TextSpan <$> inlinesToAutomergeTextSpans inlines
-  Pandoc.Para inlines -> (Automerge.BlockSpan $ AutomergeBlock ParagraphMarker parentBlockTypes) : (Automerge.TextSpan <$> inlinesToAutomergeTextSpans inlines)
-  Pandoc.Header level _ inlines -> (Automerge.BlockSpan $ AutomergeBlock (Automerge.HeadingMarker $ Heading $ HeadingLevel level) parentBlockTypes) : (Automerge.TextSpan <$> inlinesToAutomergeTextSpans inlines)
-  Pandoc.CodeBlock _ text -> [Automerge.BlockSpan $ AutomergeBlock Automerge.CodeBlockMarker parentBlockTypes, Automerge.TextSpan $ AutomergeText text []]
+  Pandoc.Para inlines -> (Automerge.BlockSpan $ AutomergeBlock ParagraphMarker parentBlockTypes False) : (Automerge.TextSpan <$> inlinesToAutomergeTextSpans inlines)
+  Pandoc.Header level _ inlines -> (Automerge.BlockSpan $ AutomergeBlock (Automerge.HeadingMarker $ Heading $ HeadingLevel level) parentBlockTypes False) : (Automerge.TextSpan <$> inlinesToAutomergeTextSpans inlines)
+  Pandoc.CodeBlock _ text -> [Automerge.BlockSpan $ AutomergeBlock Automerge.CodeBlockMarker parentBlockTypes False, Automerge.TextSpan $ AutomergeText text []]
   Pandoc.BulletList items -> concatMap (containerBlockToSpans parentBlockTypes BulletListItem) items
   Pandoc.OrderedList _ items -> concatMap (containerBlockToSpans parentBlockTypes OrderedListItem) items
   Pandoc.BlockQuote blocks -> (containerBlockToSpans parentBlockTypes PandocWriter.BlockQuote) blocks
@@ -34,9 +34,9 @@ containerBlockToSpans :: [Automerge.BlockType] -> ContainerBlockType -> [Pandoc.
 containerBlockToSpans parents itemType children = (containerBlockToSpan parents itemType : containerBlockChildrenToSpans parents itemType children)
   where
     containerBlockToSpan :: [Automerge.BlockType] -> ContainerBlockType -> Automerge.Span
-    containerBlockToSpan parentBlockTypes BulletListItem = Automerge.BlockSpan $ AutomergeBlock Automerge.UnorderedListItemMarker parentBlockTypes
-    containerBlockToSpan parentBlockTypes OrderedListItem = Automerge.BlockSpan $ AutomergeBlock Automerge.OrderedListItemMarker parentBlockTypes
-    containerBlockToSpan parentBlockTypes PandocWriter.BlockQuote = Automerge.BlockSpan $ AutomergeBlock Automerge.BlockQuoteMarker parentBlockTypes
+    containerBlockToSpan parentBlockTypes BulletListItem = Automerge.BlockSpan $ AutomergeBlock Automerge.UnorderedListItemMarker parentBlockTypes False
+    containerBlockToSpan parentBlockTypes OrderedListItem = Automerge.BlockSpan $ AutomergeBlock Automerge.OrderedListItemMarker parentBlockTypes False
+    containerBlockToSpan parentBlockTypes PandocWriter.BlockQuote = Automerge.BlockSpan $ AutomergeBlock Automerge.BlockQuoteMarker parentBlockTypes False
 
 containerBlockChildrenToSpans :: [Automerge.BlockType] -> ContainerBlockType -> [Pandoc.Block] -> [Automerge.Span]
 containerBlockChildrenToSpans parentBlockTypes itemType = concatMap $ blockToAutomergeSpans (parentBlockTypes <> [toAutomergeBlockType itemType])

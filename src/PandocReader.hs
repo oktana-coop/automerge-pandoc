@@ -222,8 +222,16 @@ treeNodeToPandocBlock node childrenNodes = case node of
   (BlockNode (PandocBlock (Pandoc.BulletList _))) -> [fmap (BlockElement . Pandoc.BulletList) (mapToChildBlocks childrenNodes)]
   (BlockNode (PandocBlock (Pandoc.OrderedList attrs _))) -> [fmap (BlockElement . Pandoc.OrderedList attrs) (mapToChildBlocks childrenNodes)]
   (BlockNode (PandocBlock (Pandoc.BlockQuote _))) -> [fmap (BlockElement . Pandoc.BlockQuote) (traverseAssertingChildIsBlock . wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes)]
-  (InlineNode inlines) -> [Right $ InlineElement inlines]
-  -- TODO: Remove when all block types are handled
+  (BlockNode (NoteRef _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note ref node"]
+  (BlockNode (NoteContent _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note content node"]
+  (InlineNode inlines) -> case Pandoc.toList inlines of
+    -- A note can have block children, so it needs different handling compared to other inline nodes.
+    -- We assume that Inline nodes contain a note only contain a single element since we are creating them in this module (see `replaceNoteRefsWithPandocNotes`).
+    [Pandoc.Note []] ->
+      [fmap (InlineElement . Pandoc.singleton . Pandoc.Note) (traverseAssertingChildIsBlock . wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes)]
+    -- In the generic case for inlines, just wrap them with a list of a single `InlineElement`.
+    _ ->
+      [Right $ InlineElement inlines]
   _ -> undefined
   where
     concatChildrenInlines :: [[Either PandocError BlockOrInlines]] -> Either PandocError Pandoc.Inlines
