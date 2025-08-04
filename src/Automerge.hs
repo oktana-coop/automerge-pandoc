@@ -155,11 +155,11 @@ parseBlock v = do
     ImageType -> pure $ BlockSpan $ AutomergeBlock ImageBlockMarker parents isEmbed
     NoteRefType -> do
       attrs <- blockData .: "attrs"
-      noteId <- attrs .: "noteId"
+      noteId <- attrs .: "id"
       pure $ BlockSpan $ AutomergeBlock (NoteRefMarker noteId) parents isEmbed
     NoteContentType -> do
       attrs <- blockData .: "attrs"
-      noteId <- attrs .: "noteId"
+      noteId <- attrs .: "id"
       pure $ BlockSpan $ AutomergeBlock (NoteContentMarker noteId) parents isEmbed
 
 parseInline :: Object -> Parser Span
