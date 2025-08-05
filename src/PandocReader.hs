@@ -190,8 +190,8 @@ replaceNoteRefsWithPandocNotes noteContentsMap = replaceNoteRefs
         Nothing ->
           -- Leave as an orphan ref; will be pruned later
           Node (BlockNode (NoteRef noteId)) []
-    -- Non-ref nodes remain the same
-    replaceNoteRefs node = node
+    -- Non-ref nodes remain the same. Call `replaceNoteRefs` recursively for their children.
+    replaceNoteRefs (Node node children) = Node node $ map replaceNoteRefs children
 
 pruneNonPandocNodeNotes :: Tree DocNode -> Tree DocNode
 pruneNonPandocNodeNotes (Node node children) = Node node prunedChildren
