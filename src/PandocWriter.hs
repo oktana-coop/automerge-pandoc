@@ -23,9 +23,9 @@ toAutomergeBlockType OrderedListItem = Automerge.OrderedListItemType
 toAutomergeBlockType PandocWriter.BlockQuote = Automerge.BlockQuoteType
 
 writeAutomerge :: (PandocMonad m) => WriterOptions -> Pandoc.Pandoc -> m T.Text
-writeAutomerge _ (Pandoc.Pandoc _ blocks) = pure $ toJSONText allSpans
+writeAutomerge _ (Pandoc.Pandoc _ blocks) = pure $ toJSONText automergeSpans
   where
-    allSpans = mainSpans ++ noteContents notesState
+    automergeSpans = mainSpans ++ noteContents notesState
     (mainSpans, notesState) = runState (blocksToAutomergeSpans [] blocks) initialState
     initialState = NoteData 0 []
 
@@ -77,21 +77,24 @@ inlineToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Inline -> NotesState [
 inlineToAutomergeSpans parents inline = case inline of
   Pandoc.Note noteBlocks -> do
     -- Generate note ID and create note content
-    state <- get
-    let newNoteId = noteCounter state + 1
+    notesState <- get
+    let newNoteId = noteCounter notesState + 1
         noteIdText = T.pack $ show newNoteId
 
     -- Convert note blocks to spans
-    noteSpans <- blocksToAutomergeSpans parents noteBlocks
+    noteContentChildBlockSpans <- blocksToAutomergeSpans parents noteBlocks
     let noteContentSpan = Automerge.BlockSpan $ AutomergeBlock (NoteContentMarker $ Automerge.NoteId noteIdText) [] False
-        allNoteSpans = noteContentSpan : noteSpans
+        noteContentSpans = noteContentSpan : noteContentChildBlockSpans
 
     -- Update state
-    modify $ \s ->
-      s
-        { noteCounter = newNoteId,
-          noteContents = noteContents s ++ allNoteSpans
-        }
+    modify
+      ( \currentNotestState ->
+          -- Getting a new state using the record update syntax.
+          currentNotestState
+            { noteCounter = newNoteId,
+              noteContents = noteContents currentNotestState ++ noteContentSpans
+            }
+      )
 
     -- Return embedded note reference span
     return [Automerge.BlockSpan $ AutomergeBlock (NoteRefMarker $ Automerge.NoteId noteIdText) [] True]
