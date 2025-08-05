@@ -30,7 +30,11 @@ writeAutomerge _ (Pandoc.Pandoc _ blocks) = pure $ toJSONText automergeSpans
     initialState = NoteData 0 []
 
 blocksToAutomergeSpans :: [Automerge.BlockType] -> [Pandoc.Block] -> NotesState [Automerge.Span]
-blocksToAutomergeSpans parentBlockTypes blocks = concat <$> mapM (blockToAutomergeSpans parentBlockTypes) blocks
+blocksToAutomergeSpans parentBlockTypes blocks = fmap concat (perBlockSpans blocks)
+  where
+    -- Convert each block into a list of spans (per block), inside the State monad.
+    perBlockSpans :: [Pandoc.Block] -> NotesState [[Automerge.Span]]
+    perBlockSpans = mapM (blockToAutomergeSpans parentBlockTypes)
 
 blockToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Block -> NotesState [Automerge.Span]
 blockToAutomergeSpans parentBlockTypes block = case block of
@@ -38,11 +42,11 @@ blockToAutomergeSpans parentBlockTypes block = case block of
   Pandoc.Para inlines -> do
     inlineSpans <- inlinesToAutomergeSpans (parentBlockTypes <> [ParagraphType]) inlines
     let blockSpan = Automerge.BlockSpan $ AutomergeBlock ParagraphMarker parentBlockTypes False
-    return $ blockSpan : inlineSpans
+    return (blockSpan : inlineSpans)
   Pandoc.Header level _ inlines -> do
     inlineSpans <- inlinesToAutomergeSpans (parentBlockTypes <> [HeadingType]) inlines
     let blockSpan = Automerge.BlockSpan $ AutomergeBlock (Automerge.HeadingMarker $ Heading $ HeadingLevel level) parentBlockTypes False
-    return $ blockSpan : inlineSpans
+    return (blockSpan : inlineSpans)
   Pandoc.CodeBlock _ text ->
     return
       [ Automerge.BlockSpan $ AutomergeBlock Automerge.CodeBlockMarker parentBlockTypes False,
@@ -68,10 +72,24 @@ containerBlockToSpans parents itemType children = do
     containerBlockToSpan parentBlockTypes PandocWriter.BlockQuote = Automerge.BlockSpan $ AutomergeBlock Automerge.BlockQuoteMarker parentBlockTypes False
 
 containerBlockChildrenToSpans :: [Automerge.BlockType] -> ContainerBlockType -> [Pandoc.Block] -> NotesState [Automerge.Span]
-containerBlockChildrenToSpans parentBlockTypes itemType blocks = concat <$> mapM (blockToAutomergeSpans (parentBlockTypes <> [toAutomergeBlockType itemType])) blocks
+containerBlockChildrenToSpans parentBlockTypes itemType blocks =
+  -- Use fmap to lift `concat` over the State structure after mapping spans
+  fmap concat (childBlockSpans blocks)
+  where
+    -- Convert each child block into a list of spans.
+    childBlockSpans :: [Pandoc.Block] -> NotesState [[Automerge.Span]]
+    childBlockSpans = mapM (blockToAutomergeSpans childParentTypes)
+
+    childParentTypes = parentBlockTypes <> [toAutomergeBlockType itemType]
 
 inlinesToAutomergeSpans :: [Automerge.BlockType] -> [Pandoc.Inline] -> NotesState [Automerge.Span]
-inlinesToAutomergeSpans parents inlines = mergeSameMarkSpans <$> concat <$> mapM (inlineToAutomergeSpans parents) inlines
+inlinesToAutomergeSpans parents inlines =
+  -- Use fmap to lift `mergeSameMarkSpans . concat` over the State structure
+  fmap (mergeSameMarkSpans . concat) (perInlineSpans inlines)
+  where
+    -- Convert each inline into a list of spans, inside the State monad.
+    perInlineSpans :: [Pandoc.Inline] -> NotesState [[Automerge.Span]]
+    perInlineSpans = mapM (inlineToAutomergeSpans parents)
 
 inlineToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Inline -> NotesState [Automerge.Span]
 inlineToAutomergeSpans parents inline = case inline of
