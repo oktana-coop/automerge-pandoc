@@ -34,13 +34,13 @@ blocksToAutomergeSpans parentBlockTypes blocks = concat <$> mapM (blockToAutomer
 
 blockToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Block -> NotesState [Automerge.Span]
 blockToAutomergeSpans parentBlockTypes block = case block of
-  Pandoc.Plain inlines -> inlinesToAutomergeSpans parentBlockTypes inlines
+  Pandoc.Plain inlines -> inlinesToAutomergeSpans (parentBlockTypes <> [ParagraphType]) inlines
   Pandoc.Para inlines -> do
-    inlineSpans <- inlinesToAutomergeSpans parentBlockTypes inlines
+    inlineSpans <- inlinesToAutomergeSpans (parentBlockTypes <> [ParagraphType]) inlines
     let blockSpan = Automerge.BlockSpan $ AutomergeBlock ParagraphMarker parentBlockTypes False
     return $ blockSpan : inlineSpans
   Pandoc.Header level _ inlines -> do
-    inlineSpans <- inlinesToAutomergeSpans parentBlockTypes inlines
+    inlineSpans <- inlinesToAutomergeSpans (parentBlockTypes <> [HeadingType]) inlines
     let blockSpan = Automerge.BlockSpan $ AutomergeBlock (Automerge.HeadingMarker $ Heading $ HeadingLevel level) parentBlockTypes False
     return $ blockSpan : inlineSpans
   Pandoc.CodeBlock _ text ->
@@ -97,7 +97,7 @@ inlineToAutomergeSpans parents inline = case inline of
       )
 
     -- Return embedded note reference span
-    return [Automerge.BlockSpan $ AutomergeBlock (NoteRefMarker $ Automerge.NoteId noteIdText) [] True]
+    return [Automerge.BlockSpan $ AutomergeBlock (NoteRefMarker $ Automerge.NoteId noteIdText) parents True]
   Pandoc.Strong inlines -> do
     wrappedSpans <- inlinesToAutomergeSpans parents inlines
     return $ addMark Automerge.Strong wrappedSpans
