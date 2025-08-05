@@ -2,7 +2,7 @@
 
 module PandocReader (toPandoc, readAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isParent, isEmbed, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
+import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isEmbed, isParent, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
 import Control.Monad ((>=>))
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
@@ -69,7 +69,7 @@ traceTree :: Tree DocNode -> Tree DocNode
 traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
 
 buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
-buildTree = (fmap (traceTree . mapNotesToPandocNotes . groupListItems  . buildRawTree)) . nonEmpty
+buildTree = (fmap (traceTree . mapNotesToPandocNotes . groupListItems . buildRawTree)) . nonEmpty
 
 buildRawTree :: NonEmpty Automerge.Span -> Tree DocNode
 buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSeeds spansList
@@ -80,9 +80,9 @@ buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSee
 buildDocNode :: (Automerge.Span, [Automerge.Span]) -> (DocNode, [(Automerge.Span, [Automerge.Span])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
   -- Non-embed block markers
-  (Automerge.BlockSpan blockSpan@(AutomergeBlock blockMarker _ False)) -> (BlockNode $ buildBlockNode blockMarker, getChildSeeds blockSpan remainingSpans)
+  (Automerge.BlockSpan blockSpan@(AutomergeBlock marker _ False)) -> (BlockNode $ buildBlockNode marker, getChildSeeds blockSpan remainingSpans)
   -- Embed block markers don't have children
-  (Automerge.BlockSpan (AutomergeBlock blockMarker _ True)) -> (BlockNode $ buildBlockNode blockMarker, [])
+  (Automerge.BlockSpan (AutomergeBlock marker _ True)) -> (BlockNode $ buildBlockNode marker, [])
   -- Text spans
   (Automerge.TextSpan textSpan) -> (InlineNode $ convertTextSpan textSpan, [])
 
@@ -106,7 +106,7 @@ getChildBlockSeeds blockSpan = addChildBlocks
         createChildBlockSeed blSpan restSpans = (Automerge.BlockSpan blSpan, Automerge.takeUntilNextSameBlockTypeSibling blSpan restSpans)
 
 buildBlockNode :: BlockMarker -> BlockNode
-buildBlockNode blockMarker = case blockMarker of
+buildBlockNode marker = case marker of
   Automerge.ParagraphMarker -> PandocBlock $ Pandoc.Para []
   Automerge.HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Pandoc.Header level nullAttr []
   Automerge.CodeBlockMarker -> PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
