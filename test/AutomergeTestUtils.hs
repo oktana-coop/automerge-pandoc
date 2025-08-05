@@ -1,6 +1,6 @@
-module AutomergeTestUtils (paragraphSpan, heading1Span, heading2Span, heading3Span, heading4Span, heading5Span, heading6Span, textSpan, strongTextSpan, emphasisTextSpan, codeTextSpan, textSpanWithMarks, linkTextSpan, codeBlockSpan, blockQuoteSpan, orderedListItemSpan, unorderedListItemSpan) where
+module AutomergeTestUtils (paragraphSpan, heading1Span, heading2Span, heading3Span, heading4Span, heading5Span, heading6Span, textSpan, strongTextSpan, emphasisTextSpan, codeTextSpan, textSpanWithMarks, linkTextSpan, codeBlockSpan, blockQuoteSpan, orderedListItemSpan, unorderedListItemSpan, noteRefSpan, noteContentSpan) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..))
+import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..))
 import qualified Data.Text as T
 
 paragraphSpan :: [BlockType] -> Span
@@ -53,3 +53,9 @@ codeBlockSpan parents = BlockSpan $ AutomergeBlock CodeBlockMarker parents False
 
 blockQuoteSpan :: [BlockType] -> Span
 blockQuoteSpan parents = BlockSpan $ AutomergeBlock BlockQuoteMarker parents False
+
+noteRefSpan :: [BlockType] -> String -> Span
+noteRefSpan parents str = BlockSpan $ AutomergeBlock (NoteRefMarker (NoteId $ T.pack str)) parents True
+
+noteContentSpan :: [BlockType] -> String -> Span
+noteContentSpan parents str = BlockSpan $ AutomergeBlock {blockMarker = (NoteContentMarker (NoteId $ T.pack str)), parentTypes = parents, isEmbed = False}

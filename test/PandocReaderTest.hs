@@ -2,13 +2,13 @@
 
 module PandocReaderTest (tests) where
 
-import Automerge as A (BlockType (BlockQuoteType, OrderedListItemType, UnorderedListItemType), Mark (..))
-import AutomergeTestUtils as Automerge (blockQuoteSpan, codeTextSpan, emphasisTextSpan, heading1Span, heading2Span, heading4Span, linkTextSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
+import Automerge as A (BlockType (..), Mark (..))
+import AutomergeTestUtils as Automerge (blockQuoteSpan, codeTextSpan, emphasisTextSpan, heading1Span, heading2Span, heading4Span, linkTextSpan, noteContentSpan, noteRefSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
 import PandocReader (toPandoc)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hspec (testSpec)
-import Text.Pandoc.Builder as Pandoc (blockQuote, bulletList, code, doc, emph, fromList, header, link, orderedList, para, plain, str, strong, toList)
+import Text.Pandoc.Builder as Pandoc (blockQuote, bulletList, code, doc, emph, fromList, header, link, note, orderedList, para, plain, str, strong, toList)
 import Text.Pandoc.Class (runIO)
 
 tests :: IO TestTree
@@ -490,3 +490,40 @@ spec = do
       case result of
         Left err -> expectationFailure ("toPandoc failed: " <> show err)
         Right actual -> actual `shouldBe` Pandoc.doc expected
+    describe "Notes" $ do
+      it "converts a note reference and its content into a Pandoc note" $ do
+        let noteId = "1"
+            input =
+              [ Automerge.paragraphSpan [],
+                Automerge.textSpan "A paragraph ",
+                Automerge.noteRefSpan [A.ParagraphType] noteId,
+                Automerge.paragraphSpan [],
+                Automerge.textSpan "Another paragraph",
+                Automerge.noteContentSpan [] noteId,
+                Automerge.textSpan "This is a note"
+              ]
+
+            expected =
+              fromList $
+                concat
+                  [ toList $
+                      Pandoc.para $
+                        fromList $
+                          concat $
+                            [ toList $ Pandoc.str "A paragraph ",
+                              toList $
+                                Pandoc.note $
+                                  fromList $
+                                    concat $
+                                      [ toList $
+                                          (Pandoc.plain $ Pandoc.str "This is a note")
+                                      ]
+                            ],
+                    toList $
+                      Pandoc.para $
+                        Pandoc.str "Another paragraph"
+                  ]
+        result <- runIO $ toPandoc input
+        case result of
+          Left err -> expectationFailure ("toPandoc failed: " <> show err)
+          Right actual -> actual `shouldBe` Pandoc.doc expected
