@@ -623,3 +623,119 @@ spec = do
       case result of
         Left err -> expectationFailure ("toPandoc failed: " <> show err)
         Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles multi-block note content" $ do
+      let input =
+            [ Automerge.paragraphSpan [],
+              Automerge.textSpan "A paragraph ",
+              Automerge.noteRefSpan [A.ParagraphType] "1",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Another paragraph",
+              Automerge.noteContentSpan [] "1",
+              Automerge.paragraphSpan [A.NoteContentType],
+              Automerge.textSpan "Note content paragraph 1",
+              Automerge.paragraphSpan [A.NoteContentType],
+              Automerge.textSpan "Note content paragraph 2"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $
+                    Pandoc.para $
+                      fromList $
+                        concat $
+                          [ toList $ Pandoc.str "A paragraph ",
+                            toList $
+                              Pandoc.note $
+                                fromList $
+                                  concat $
+                                    [ toList $
+                                        (Pandoc.para $ Pandoc.str "Note content paragraph 1"),
+                                      toList $
+                                        (Pandoc.para $ Pandoc.str "Note content paragraph 2")
+                                    ]
+                          ],
+                  toList $
+                    Pandoc.para $
+                      Pandoc.str "Another paragraph"
+                ]
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "ignores a note reference without content" $ do
+      let input =
+            [ Automerge.paragraphSpan [],
+              Automerge.textSpan "A paragraph ",
+              Automerge.noteRefSpan [A.ParagraphType] "1",
+              Automerge.noteRefSpan [A.ParagraphType] "2",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Another paragraph",
+              Automerge.noteContentSpan [] "1",
+              Automerge.textSpan "Note 1 content"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $
+                    Pandoc.para $
+                      fromList $
+                        concat $
+                          [ toList $ Pandoc.str "A paragraph ",
+                            toList $
+                              Pandoc.note $
+                                fromList $
+                                  concat $
+                                    [ toList $
+                                        (Pandoc.plain $ Pandoc.str "Note 1 content")
+                                    ]
+                          ],
+                  toList $
+                    Pandoc.para $
+                      Pandoc.str "Another paragraph"
+                ]
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "ingores note content without a corresponding reference" $ do
+      let input =
+            [ Automerge.paragraphSpan [],
+              Automerge.textSpan "A paragraph ",
+              Automerge.noteRefSpan [A.ParagraphType] "1",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Another paragraph",
+              Automerge.noteContentSpan [] "1",
+              Automerge.textSpan "Note 1 content",
+              Automerge.noteContentSpan [] "2",
+              Automerge.textSpan "Note 2 content"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $
+                    Pandoc.para $
+                      fromList $
+                        concat $
+                          [ toList $ Pandoc.str "A paragraph ",
+                            toList $
+                              Pandoc.note $
+                                fromList $
+                                  concat $
+                                    [ toList $
+                                        (Pandoc.plain $ Pandoc.str "Note 1 content")
+                                    ]
+                          ],
+                  toList $
+                    Pandoc.para $
+                      Pandoc.str "Another paragraph"
+                ]
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
