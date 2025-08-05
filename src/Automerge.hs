@@ -110,7 +110,7 @@ instance Semigroup TextSpan where
 instance Monoid TextSpan where
   mempty = AutomergeText T.empty []
 
-data BlockSpan = AutomergeBlock {blockMarker :: BlockMarker, parents :: [BlockType], isEmbed :: Bool} deriving (Show, Eq)
+data BlockSpan = AutomergeBlock {blockMarker :: BlockMarker, parentTypes :: [BlockType], isEmbed :: Bool} deriving (Show, Eq)
 
 blockType :: BlockSpan -> BlockType
 blockType (AutomergeBlock (ParagraphMarker) _ _) = ParagraphType
@@ -140,27 +140,27 @@ parseBlock :: Object -> Parser Span
 parseBlock v = do
   blockData <- v .: "value"
   bt <- (blockData .: "type" :: Parser BlockType)
-  parentTypes <- (blockData .: "parents" :: Parser [BlockType])
+  parents <- (blockData .: "parents" :: Parser [BlockType])
   embed <- (blockData .: "isEmbed" :: Parser Bool)
   case bt of
-    ParagraphType -> pure $ BlockSpan $ AutomergeBlock ParagraphMarker parentTypes embed
+    ParagraphType -> pure $ BlockSpan $ AutomergeBlock ParagraphMarker parents embed
     HeadingType -> do
       attrs <- blockData .: "attrs"
       level <- attrs .: "level"
-      pure $ BlockSpan $ AutomergeBlock (HeadingMarker $ Heading $ HeadingLevel level) parentTypes embed
-    CodeBlockType -> pure $ BlockSpan $ AutomergeBlock CodeBlockMarker parentTypes embed
-    BlockQuoteType -> pure $ BlockSpan $ AutomergeBlock BlockQuoteMarker parentTypes embed
-    OrderedListItemType -> pure $ BlockSpan $ AutomergeBlock OrderedListItemMarker parentTypes embed
-    UnorderedListItemType -> pure $ BlockSpan $ AutomergeBlock UnorderedListItemMarker parentTypes embed
-    ImageType -> pure $ BlockSpan $ AutomergeBlock ImageBlockMarker parentTypes embed
+      pure $ BlockSpan $ AutomergeBlock (HeadingMarker $ Heading $ HeadingLevel level) parents embed
+    CodeBlockType -> pure $ BlockSpan $ AutomergeBlock CodeBlockMarker parents embed
+    BlockQuoteType -> pure $ BlockSpan $ AutomergeBlock BlockQuoteMarker parents embed
+    OrderedListItemType -> pure $ BlockSpan $ AutomergeBlock OrderedListItemMarker parents embed
+    UnorderedListItemType -> pure $ BlockSpan $ AutomergeBlock UnorderedListItemMarker parents embed
+    ImageType -> pure $ BlockSpan $ AutomergeBlock ImageBlockMarker parents embed
     NoteRefType -> do
       attrs <- blockData .: "attrs"
       noteId <- attrs .: "id"
-      pure $ BlockSpan $ AutomergeBlock (NoteRefMarker noteId) parentTypes embed
+      pure $ BlockSpan $ AutomergeBlock (NoteRefMarker noteId) parents embed
     NoteContentType -> do
       attrs <- blockData .: "attrs"
       noteId <- attrs .: "id"
-      pure $ BlockSpan $ AutomergeBlock (NoteContentMarker noteId) parentTypes embed
+      pure $ BlockSpan $ AutomergeBlock (NoteContentMarker noteId) parents embed
 
 parseInline :: Object -> Parser Span
 parseInline v = do
@@ -191,14 +191,14 @@ parseAutomergeSpansText :: T.Text -> Either String [Span]
 parseAutomergeSpansText = eitherDecodeStrictText
 
 instance ToJSON Span where
-  toJSON (BlockSpan (AutomergeBlock marker parentTypes embed)) = case marker of
+  toJSON (BlockSpan (AutomergeBlock marker parents embed)) = case marker of
     ParagraphMarker ->
       object
         [ "type" .= T.pack "block",
           "value"
             .= object
               [ "isEmbed" .= embed,
-                "parents" .= parentTypes,
+                "parents" .= parents,
                 "type" .= T.pack "paragraph",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
               ]
@@ -209,7 +209,7 @@ instance ToJSON Span where
           "value"
             .= object
               [ "isEmbed" .= embed,
-                "parents" .= parentTypes,
+                "parents" .= parents,
                 "type" .= T.pack "heading",
                 "attrs" .= object ["level" .= level]
               ]
@@ -220,7 +220,7 @@ instance ToJSON Span where
           "value"
             .= object
               [ "isEmbed" .= embed,
-                "parents" .= parentTypes,
+                "parents" .= parents,
                 "type" .= T.pack "code-block",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
               ]
@@ -242,7 +242,7 @@ instance ToJSON Span where
           "value"
             .= object
               [ "isEmbed" .= embed,
-                "parents" .= parentTypes,
+                "parents" .= parents,
                 "type" .= T.pack "ordered-list-item",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
               ]
@@ -253,7 +253,7 @@ instance ToJSON Span where
           "value"
             .= object
               [ "isEmbed" .= embed,
-                "parents" .= parentTypes,
+                "parents" .= parents,
                 "type" .= T.pack "unordered-list-item",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
               ]
@@ -264,7 +264,7 @@ instance ToJSON Span where
           "value"
             .= object
               [ "isEmbed" .= embed,
-                "parents" .= parentTypes,
+                "parents" .= parents,
                 "type" .= T.pack "image",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
               ]
@@ -275,7 +275,7 @@ instance ToJSON Span where
           "value"
             .= object
               [ "isEmbed" .= embed,
-                "parents" .= parentTypes,
+                "parents" .= parents,
                 "type" .= T.pack "__ext__note_ref",
                 "attrs" .= object ["id" .= noteId]
               ]
@@ -286,7 +286,7 @@ instance ToJSON Span where
           "value"
             .= object
               [ "isEmbed" .= embed,
-                "parents" .= parentTypes,
+                "parents" .= parents,
                 "type" .= T.pack "__ext__note_content",
                 "attrs" .= object ["id" .= noteId]
               ]
@@ -320,14 +320,14 @@ takeUntilNextSameBlockTypeSibling bl (x : xs) = case x of
   _ -> x : takeUntilNextSameBlockTypeSibling bl xs
 
 isTopLevelBlock :: BlockSpan -> Bool
-isTopLevelBlock (AutomergeBlock _ parentTypes _) = null parentTypes
+isTopLevelBlock (AutomergeBlock _ parents _) = null parents
 
 isParent :: Maybe BlockSpan -> BlockSpan -> Bool
 isParent (Just parentBlock) potentialChildBlock = lastParentMatches parentBlockType potentialChildParents && isProperPrefix parentParents potentialChildParents
   where
     parentBlockType = blockType parentBlock
-    parentParents = parents parentBlock
-    potentialChildParents = parents potentialChildBlock
+    parentParents = parentTypes parentBlock
+    potentialChildParents = parentTypes potentialChildBlock
 isParent Nothing blockSpan = isTopLevelBlock blockSpan
 
 isSibling :: BlockSpan -> BlockSpan -> Bool
@@ -345,4 +345,4 @@ isSiblingListItem (AutomergeBlock _ _ _) (AutomergeBlock _ _ _) = False
 
 isProperPrefix :: [BlockType] -> [BlockType] -> Bool
 isProperPrefix _ [] = False
-isProperPrefix parentTypes potentialChildParentTypes = parentTypes == (init potentialChildParentTypes)
+isProperPrefix parents potentialChildParents = parents == (init potentialChildParents)

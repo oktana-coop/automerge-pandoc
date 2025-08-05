@@ -57,9 +57,9 @@ blockToAutomergeSpans parentBlockTypes block = case block of
   _ -> return [] -- Ignore blocks we don't recognize
 
 containerBlockToSpans :: [Automerge.BlockType] -> ContainerBlockType -> [Pandoc.Block] -> NotesState [Automerge.Span]
-containerBlockToSpans parentTypes itemType children = do
-  let containerSpan = containerBlockToSpan parentTypes itemType
-  childSpans <- containerBlockChildrenToSpans parentTypes itemType children
+containerBlockToSpans parents itemType children = do
+  let containerSpan = containerBlockToSpan parents itemType
+  childSpans <- containerBlockChildrenToSpans parents itemType children
   return (containerSpan : childSpans)
   where
     containerBlockToSpan :: [Automerge.BlockType] -> ContainerBlockType -> Automerge.Span
@@ -71,10 +71,10 @@ containerBlockChildrenToSpans :: [Automerge.BlockType] -> ContainerBlockType -> 
 containerBlockChildrenToSpans parentBlockTypes itemType blocks = concat <$> mapM (blockToAutomergeSpans (parentBlockTypes <> [toAutomergeBlockType itemType])) blocks
 
 inlinesToAutomergeSpans :: [Automerge.BlockType] -> [Pandoc.Inline] -> NotesState [Automerge.Span]
-inlinesToAutomergeSpans parentTypes inlines = mergeSameMarkSpans <$> concat <$> mapM (inlineToAutomergeSpans parentTypes) inlines
+inlinesToAutomergeSpans parents inlines = mergeSameMarkSpans <$> concat <$> mapM (inlineToAutomergeSpans parents) inlines
 
 inlineToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Inline -> NotesState [Automerge.Span]
-inlineToAutomergeSpans parentTypes inline = case inline of
+inlineToAutomergeSpans parents inline = case inline of
   Pandoc.Note noteBlocks -> do
     -- Generate note ID and create note content
     state <- get
@@ -82,7 +82,7 @@ inlineToAutomergeSpans parentTypes inline = case inline of
         noteIdText = T.pack $ show newNoteId
 
     -- Convert note blocks to spans
-    noteSpans <- blocksToAutomergeSpans parentTypes noteBlocks
+    noteSpans <- blocksToAutomergeSpans parents noteBlocks
     let noteContentSpan = Automerge.BlockSpan $ AutomergeBlock (NoteContentMarker $ Automerge.NoteId noteIdText) [] False
         allNoteSpans = noteContentSpan : noteSpans
 
@@ -96,13 +96,13 @@ inlineToAutomergeSpans parentTypes inline = case inline of
     -- Return embedded note reference span
     return [Automerge.BlockSpan $ AutomergeBlock (NoteRefMarker $ Automerge.NoteId noteIdText) [] True]
   Pandoc.Strong inlines -> do
-    wrappedSpans <- inlinesToAutomergeSpans parentTypes inlines
+    wrappedSpans <- inlinesToAutomergeSpans parents inlines
     return $ addMark Automerge.Strong wrappedSpans
   Pandoc.Emph inlines -> do
-    wrappedSpans <- inlinesToAutomergeSpans parentTypes inlines
+    wrappedSpans <- inlinesToAutomergeSpans parents inlines
     return $ addMark Automerge.Emphasis wrappedSpans
   Pandoc.Link _ inlines (linkUrl, linkTitle) -> do
-    wrappedSpans <- inlinesToAutomergeSpans parentTypes inlines
+    wrappedSpans <- inlinesToAutomergeSpans parents inlines
     return $ addMark (Automerge.LinkMark $ Automerge.Link {url = linkUrl, title = linkTitle}) wrappedSpans
   _ -> return $ Automerge.TextSpan <$> inlineToTextSpan inline
 
