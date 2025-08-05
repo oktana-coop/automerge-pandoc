@@ -2,7 +2,7 @@
 
 module PandocReader (toPandoc, readAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isParent, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
+import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isParent, isEmbed, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
 import Control.Monad ((>=>))
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
@@ -69,7 +69,7 @@ traceTree :: Tree DocNode -> Tree DocNode
 traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
 
 buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
-buildTree = (fmap (traceTree . mapNotesToPandocNotes . groupListItems . buildRawTree)) . nonEmpty
+buildTree = (fmap (traceTree . mapNotesToPandocNotes . groupListItems  . buildRawTree)) . nonEmpty
 
 buildRawTree :: NonEmpty Automerge.Span -> Tree DocNode
 buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSeeds spansList
@@ -79,7 +79,11 @@ buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSee
 
 buildDocNode :: (Automerge.Span, [Automerge.Span]) -> (DocNode, [(Automerge.Span, [Automerge.Span])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
-  (Automerge.BlockSpan blockSpan@(AutomergeBlock blockMarker _ _)) -> (BlockNode $ buildBlockNode blockMarker, getChildSeeds blockSpan remainingSpans)
+  -- Non-embed block markers
+  (Automerge.BlockSpan blockSpan@(AutomergeBlock blockMarker _ False)) -> (BlockNode $ buildBlockNode blockMarker, getChildSeeds blockSpan remainingSpans)
+  -- Embed block markers don't have children
+  (Automerge.BlockSpan (AutomergeBlock blockMarker _ True)) -> (BlockNode $ buildBlockNode blockMarker, [])
+  -- Text spans
   (Automerge.TextSpan textSpan) -> (InlineNode $ convertTextSpan textSpan, [])
 
 getChildSeeds :: Automerge.BlockSpan -> [Automerge.Span] -> [(Automerge.Span, [Automerge.Span])]
@@ -94,7 +98,7 @@ getChildBlockSeeds blockSpan = addChildBlocks
     addChildBlocks (x : xs) = case x of
       -- Note that we will enter this case even when `blockSpan` is `Nothing`.
       -- In this case, `Automerge.isParent` will return true for the top-level blocks.
-      Automerge.BlockSpan currentSpan | Automerge.isParent blockSpan currentSpan -> createChildBlockSeed currentSpan xs : addChildBlocks xs
+      Automerge.BlockSpan currentSpan | Automerge.isParent blockSpan currentSpan && (not $ isEmbed currentSpan) -> createChildBlockSeed currentSpan xs : addChildBlocks xs
       _ -> addChildBlocks xs
       where
         createChildBlockSeed :: BlockSpan -> [Automerge.Span] -> (Automerge.Span, [Automerge.Span])

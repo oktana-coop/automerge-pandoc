@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, parseAutomergeSpansText, Span (..), BlockMarker (..), Heading (..), HeadingLevel (..), NoteId (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilNonEmbedBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
+module Automerge (parseAutomergeSpans, parseAutomergeSpansText, Span (..), BlockMarker (..), Heading (..), HeadingLevel (..), NoteId (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, isEmbed, takeUntilNonEmbedBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
 
 import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, Null, String), eitherDecode, eitherDecodeStrictText, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
@@ -321,6 +321,10 @@ takeUntilNextSameBlockTypeSibling bl (x : xs) = case x of
 
 isTopLevelBlock :: BlockSpan -> Bool
 isTopLevelBlock (AutomergeBlock _ parents _) = null parents
+
+isEmbed :: BlockSpan -> Bool
+isEmbed (AutomergeBlock _ _ True) = True
+isEmbed (AutomergeBlock _ _ False) = False
 
 isParent :: Maybe BlockSpan -> BlockSpan -> Bool
 isParent (Just block@(AutomergeBlock _ parents _)) (AutomergeBlock _ candidateParents _) = candidateLastParentMatches (blockType block) candidateParents && isProperPrefix parents candidateParents
