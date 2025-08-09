@@ -1,6 +1,7 @@
 module PandocWriter (writeAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), toJSONText)
+import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), toJSONText)
+import Control.Monad.State (State, get, modify, runState)
 import qualified Data.Text as T
 import Text.Pandoc (WriterOptions)
 import Text.Pandoc.Class (PandocMonad)
@@ -8,67 +9,140 @@ import Text.Pandoc.Definition as Pandoc (Block (..), Inline (..), Pandoc (Pandoc
 
 data ContainerBlockType = BulletListItem | OrderedListItem | BlockQuote deriving (Show, Eq)
 
+data NoteData = NoteData
+  { noteCounter :: Int,
+    -- Accumulated note content spans
+    noteContents :: [Automerge.Span]
+  }
+
+type NotesState = State NoteData
+
 toAutomergeBlockType :: ContainerBlockType -> BlockType
 toAutomergeBlockType BulletListItem = Automerge.UnorderedListItemType
 toAutomergeBlockType OrderedListItem = Automerge.OrderedListItemType
 toAutomergeBlockType PandocWriter.BlockQuote = Automerge.BlockQuoteType
 
 writeAutomerge :: (PandocMonad m) => WriterOptions -> Pandoc.Pandoc -> m T.Text
-writeAutomerge _ (Pandoc.Pandoc _ blocks) = pure $ toJSONText $ blocksToAutomergeSpans blocks
+writeAutomerge _ (Pandoc.Pandoc _ blocks) = pure $ toJSONText automergeSpans
+  where
+    automergeSpans = mainSpans ++ noteContents notesState
+    (mainSpans, notesState) = runState (blocksToAutomergeSpans [] blocks) initialState
+    initialState = NoteData 0 []
 
-blocksToAutomergeSpans :: [Pandoc.Block] -> [Automerge.Span]
-blocksToAutomergeSpans = concatMap $ blockToAutomergeSpans []
+blocksToAutomergeSpans :: [Automerge.BlockType] -> [Pandoc.Block] -> NotesState [Automerge.Span]
+blocksToAutomergeSpans parentBlockTypes blocks = fmap concat (perBlockSpans blocks)
+  where
+    -- Convert each block into a list of spans (per block), inside the State monad.
+    perBlockSpans :: [Pandoc.Block] -> NotesState [[Automerge.Span]]
+    perBlockSpans = mapM (blockToAutomergeSpans parentBlockTypes)
 
-blockToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Block -> [Automerge.Span]
+blockToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Block -> NotesState [Automerge.Span]
 blockToAutomergeSpans parentBlockTypes block = case block of
-  Pandoc.Plain inlines -> Automerge.TextSpan <$> inlinesToAutomergeTextSpans inlines
-  Pandoc.Para inlines -> (Automerge.BlockSpan $ AutomergeBlock ParagraphMarker parentBlockTypes) : (Automerge.TextSpan <$> inlinesToAutomergeTextSpans inlines)
-  Pandoc.Header level _ inlines -> (Automerge.BlockSpan $ AutomergeBlock (Automerge.HeadingMarker $ Heading $ HeadingLevel level) parentBlockTypes) : (Automerge.TextSpan <$> inlinesToAutomergeTextSpans inlines)
-  Pandoc.CodeBlock _ text -> [Automerge.BlockSpan $ AutomergeBlock Automerge.CodeBlockMarker parentBlockTypes, Automerge.TextSpan $ AutomergeText text []]
-  Pandoc.BulletList items -> concatMap (containerBlockToSpans parentBlockTypes BulletListItem) items
-  Pandoc.OrderedList _ items -> concatMap (containerBlockToSpans parentBlockTypes OrderedListItem) items
-  Pandoc.BlockQuote blocks -> (containerBlockToSpans parentBlockTypes PandocWriter.BlockQuote) blocks
-  _ -> [] -- Ignore blocks we don't recognize. TODO: Implement something more sophisticated here.
+  Pandoc.Plain inlines -> inlinesToAutomergeSpans (parentBlockTypes <> [ParagraphType]) inlines
+  Pandoc.Para inlines -> do
+    inlineSpans <- inlinesToAutomergeSpans (parentBlockTypes <> [ParagraphType]) inlines
+    let blockSpan = Automerge.BlockSpan $ AutomergeBlock ParagraphMarker parentBlockTypes False
+    return (blockSpan : inlineSpans)
+  Pandoc.Header level _ inlines -> do
+    inlineSpans <- inlinesToAutomergeSpans (parentBlockTypes <> [HeadingType]) inlines
+    let blockSpan = Automerge.BlockSpan $ AutomergeBlock (Automerge.HeadingMarker $ Heading $ HeadingLevel level) parentBlockTypes False
+    return (blockSpan : inlineSpans)
+  Pandoc.CodeBlock _ text ->
+    return
+      [ Automerge.BlockSpan $ AutomergeBlock Automerge.CodeBlockMarker parentBlockTypes False,
+        Automerge.TextSpan $ AutomergeText text []
+      ]
+  Pandoc.BulletList items ->
+    concat <$> mapM (containerBlockToAutomergeSpans parentBlockTypes BulletListItem) items
+  Pandoc.OrderedList _ items ->
+    concat <$> mapM (containerBlockToAutomergeSpans parentBlockTypes OrderedListItem) items
+  Pandoc.BlockQuote blocks ->
+    containerBlockToAutomergeSpans parentBlockTypes PandocWriter.BlockQuote blocks
+  _ -> return [] -- Ignore blocks we don't recognize
 
-containerBlockToSpans :: [Automerge.BlockType] -> ContainerBlockType -> [Pandoc.Block] -> [Automerge.Span]
-containerBlockToSpans parents itemType children = (containerBlockToSpan parents itemType : containerBlockChildrenToSpans parents itemType children)
+containerBlockToAutomergeSpans :: [Automerge.BlockType] -> ContainerBlockType -> [Pandoc.Block] -> NotesState [Automerge.Span]
+containerBlockToAutomergeSpans parents itemType children = do
+  let containerSpan = containerBlockToSpan parents itemType
+      childParentTypes = parents <> [toAutomergeBlockType itemType]
+  childSpans <- fmap concat $ mapM (blockToAutomergeSpans childParentTypes) children
+  return (containerSpan : childSpans)
   where
     containerBlockToSpan :: [Automerge.BlockType] -> ContainerBlockType -> Automerge.Span
-    containerBlockToSpan parentBlockTypes BulletListItem = Automerge.BlockSpan $ AutomergeBlock Automerge.UnorderedListItemMarker parentBlockTypes
-    containerBlockToSpan parentBlockTypes OrderedListItem = Automerge.BlockSpan $ AutomergeBlock Automerge.OrderedListItemMarker parentBlockTypes
-    containerBlockToSpan parentBlockTypes PandocWriter.BlockQuote = Automerge.BlockSpan $ AutomergeBlock Automerge.BlockQuoteMarker parentBlockTypes
+    containerBlockToSpan parentBlockTypes BulletListItem =
+      Automerge.BlockSpan $ AutomergeBlock Automerge.UnorderedListItemMarker parentBlockTypes False
+    containerBlockToSpan parentBlockTypes OrderedListItem =
+      Automerge.BlockSpan $ AutomergeBlock Automerge.OrderedListItemMarker parentBlockTypes False
+    containerBlockToSpan parentBlockTypes PandocWriter.BlockQuote =
+      Automerge.BlockSpan $ AutomergeBlock Automerge.BlockQuoteMarker parentBlockTypes False
 
-containerBlockChildrenToSpans :: [Automerge.BlockType] -> ContainerBlockType -> [Pandoc.Block] -> [Automerge.Span]
-containerBlockChildrenToSpans parentBlockTypes itemType = concatMap $ blockToAutomergeSpans (parentBlockTypes <> [toAutomergeBlockType itemType])
+inlinesToAutomergeSpans :: [Automerge.BlockType] -> [Pandoc.Inline] -> NotesState [Automerge.Span]
+inlinesToAutomergeSpans parents inlines =
+  -- Use fmap to lift `mergeSameMarkSpans . concat` over the State structure
+  fmap (mergeSameMarkSpans . concat) (perInlineSpans inlines)
+  where
+    -- Convert each inline into a list of spans, inside the State monad.
+    perInlineSpans :: [Pandoc.Inline] -> NotesState [[Automerge.Span]]
+    perInlineSpans = mapM (inlineToAutomergeSpans parents)
 
-inlinesToAutomergeTextSpans :: [Pandoc.Inline] -> [Automerge.TextSpan]
-inlinesToAutomergeTextSpans = mergeSameMarkSpans . foldMap inlineToTextSpan
+inlineToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Inline -> NotesState [Automerge.Span]
+inlineToAutomergeSpans parents inline = case inline of
+  Pandoc.Note noteBlocks -> do
+    -- Generate note ID and create note content
+    notesState <- get
+    let newNoteId = noteCounter notesState + 1
+        noteIdText = T.pack $ show newNoteId
 
-mergeSameMarkSpans :: [Automerge.TextSpan] -> [Automerge.TextSpan]
+    -- Convert note blocks to spans
+    noteContentChildBlockSpans <- blocksToAutomergeSpans parents noteBlocks
+    let noteContentSpan = Automerge.BlockSpan $ AutomergeBlock (NoteContentMarker $ Automerge.NoteId noteIdText) [] False
+        noteContentSpans = noteContentSpan : noteContentChildBlockSpans
+
+    -- Update state
+    modify
+      ( \currentNotestState ->
+          -- Getting a new state using the record update syntax.
+          currentNotestState
+            { noteCounter = newNoteId,
+              noteContents = noteContents currentNotestState ++ noteContentSpans
+            }
+      )
+
+    -- Return embedded note reference span
+    return [Automerge.BlockSpan $ AutomergeBlock (NoteRefMarker $ Automerge.NoteId noteIdText) parents True]
+  Pandoc.Strong inlines -> do
+    wrappedSpans <- inlinesToAutomergeSpans parents inlines
+    return $ addMark Automerge.Strong wrappedSpans
+  Pandoc.Emph inlines -> do
+    wrappedSpans <- inlinesToAutomergeSpans parents inlines
+    return $ addMark Automerge.Emphasis wrappedSpans
+  Pandoc.Link _ inlines (linkUrl, linkTitle) -> do
+    wrappedSpans <- inlinesToAutomergeSpans parents inlines
+    return $ addMark (Automerge.LinkMark $ Automerge.Link {url = linkUrl, title = linkTitle}) wrappedSpans
+  _ -> return $ Automerge.TextSpan <$> inlineToTextSpan inline
+
+mergeSameMarkSpans :: [Automerge.Span] -> [Automerge.Span]
 mergeSameMarkSpans = foldr mergeOrAppendAdjacent []
   where
-    -- This is the folding function for merging the adjacent elements if their marks are the same
-    mergeOrAppendAdjacent :: Automerge.TextSpan -> [Automerge.TextSpan] -> [Automerge.TextSpan]
+    mergeOrAppendAdjacent :: Automerge.Span -> [Automerge.Span] -> [Automerge.Span]
     mergeOrAppendAdjacent x [] = [x]
-    -- pattern-match on: the current element (x), the one to its right (firstOfRest) and the rest of the fold
-    mergeOrAppendAdjacent x (firstOfRest : rest) =
-      if marks x == marks firstOfRest
-        -- if the element's marks are the same with the one to its right, we merge them and then add them to the rest of the fold.
-        then (x <> firstOfRest) : rest
-        -- if they are not the same we end up with an extra text span in the list for the current element (we prepend it to the existing list for the fold.)
-        else x : firstOfRest : rest
+    -- We only merge if the adjacent spans are **text** spans and they have the same marks.
+    mergeOrAppendAdjacent (TextSpan xTextSpan) (TextSpan firstOrRestTextSpan : rest)
+      | marks xTextSpan == marks firstOrRestTextSpan =
+          TextSpan (xTextSpan <> firstOrRestTextSpan) : rest
+    mergeOrAppendAdjacent x rest = x : rest
 
 inlineToTextSpan :: Pandoc.Inline -> [Automerge.TextSpan]
 inlineToTextSpan inline = case inline of
   Pandoc.Str str -> [AutomergeText str []]
   Pandoc.Space -> [AutomergeText (T.pack " ") []]
-  Pandoc.Strong inlines -> addMark Automerge.Strong inlines
-  Pandoc.Emph inlines -> addMark Automerge.Emphasis inlines
-  Pandoc.Link _ inlines (linkUrl, linkTitle) -> addMark (Automerge.LinkMark $ Automerge.Link {url = linkUrl, title = linkTitle}) inlines
   Pandoc.Code _ text -> [AutomergeText text [Automerge.Code]]
   -- TODO: Handle other inline elements
   _ -> []
 
-addMark :: Automerge.Mark -> [Pandoc.Inline] -> [Automerge.TextSpan]
--- Monoidally add the mark to all text spans created for the inline elements
-addMark mark inlines = fmap (AutomergeText T.empty [mark] <>) (inlinesToAutomergeTextSpans inlines)
+addMark :: Automerge.Mark -> [Automerge.Span] -> [Automerge.Span]
+addMark mark spans = fmap (addMarkToSpan mark) spans
+  where
+    addMarkToSpan :: Automerge.Mark -> Automerge.Span -> Automerge.Span
+    addMarkToSpan m (Automerge.TextSpan textSpan) = Automerge.TextSpan $ AutomergeText T.empty [m] <> textSpan
+    -- Leave non-text spans (like note refs) unchanged
+    addMarkToSpan _ otherSpan = otherSpan

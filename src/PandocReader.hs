@@ -2,11 +2,12 @@
 
 module PandocReader (toPandoc, readAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), Span (..), TextSpan (..), isParent, parseAutomergeSpansText, takeUntilBlockSpan, takeUntilNextSameBlockTypeSibling)
+import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isEmbed, isParent, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
 import Control.Monad ((>=>))
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
 import Data.List.NonEmpty (NonEmpty (..), nonEmpty, toList)
+import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Data.Tree (Tree (Node), drawTree, foldTree, unfoldForest)
@@ -15,7 +16,7 @@ import Text.Pandoc (PandocError (PandocParseError, PandocSyntaxMapError), Reader
 import Text.Pandoc.Builder as Pandoc
   ( Block (..),
     Blocks,
-    Inline (Str),
+    Inline (Note, Str),
     Inlines,
     ListNumberDelim (DefaultDelim),
     ListNumberStyle (DefaultStyle),
@@ -26,6 +27,7 @@ import Text.Pandoc.Builder as Pandoc
     fromList,
     link,
     nullAttr,
+    singleton,
     str,
     strong,
     toList,
@@ -57,7 +59,9 @@ toPandoc = (either throwError (pure . Pandoc.doc)) . convertSpansToBlocks
     convertSpansToBlocks :: [Automerge.Span] -> Either PandocError Pandoc.Blocks
     convertSpansToBlocks = fromMaybe (Right $ Pandoc.fromList []) . fmap treeToPandocBlocks . buildTree
 
-data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem deriving (Show)
+newtype NoteId = NoteId T.Text deriving (Show, Eq, Ord)
+
+data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem | NoteRef PandocReader.NoteId | NoteContent PandocReader.NoteId deriving (Show)
 
 data DocNode = Root | BlockNode BlockNode | InlineNode Pandoc.Inlines deriving (Show)
 
@@ -65,18 +69,25 @@ traceTree :: Tree DocNode -> Tree DocNode
 traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
 
 buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
-buildTree = (fmap (traceTree . groupListItems . buildRawTree)) . nonEmpty
+buildTree = (fmap (traceTree . mapNotesToPandocNotes . groupListItems . buildRawTree)) . nonEmpty
 
 buildRawTree :: NonEmpty Automerge.Span -> Tree DocNode
-buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getChildBlockSeeds Nothing $ Data.List.NonEmpty.toList spans
+buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSeeds spansList
+  where
+    spansList = Data.List.NonEmpty.toList spans
+    getTopLevelBlockSeeds = getChildBlockSeeds Nothing
 
 buildDocNode :: (Automerge.Span, [Automerge.Span]) -> (DocNode, [(Automerge.Span, [Automerge.Span])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
-  (Automerge.BlockSpan blockSpan@(AutomergeBlock blockMarker _)) -> (BlockNode $ buildBlockNode blockMarker, getChildSeeds blockSpan remainingSpans)
+  -- Non-embed block markers
+  (Automerge.BlockSpan blockSpan@(AutomergeBlock marker _ False)) -> (BlockNode $ buildBlockNode marker, getChildSeeds blockSpan remainingSpans)
+  -- Embed block markers don't have children
+  (Automerge.BlockSpan (AutomergeBlock marker _ True)) -> (BlockNode $ buildBlockNode marker, [])
+  -- Text spans
   (Automerge.TextSpan textSpan) -> (InlineNode $ convertTextSpan textSpan, [])
 
 getChildSeeds :: Automerge.BlockSpan -> [Automerge.Span] -> [(Automerge.Span, [Automerge.Span])]
-getChildSeeds blockSpan = (addChildlessSeed . Automerge.takeUntilBlockSpan) <> (getChildBlockSeeds $ Just blockSpan)
+getChildSeeds blockSpan = (addChildlessSeed . Automerge.takeUntilNonEmbedBlockSpan) <> (getChildBlockSeeds $ Just blockSpan)
   where
     addChildlessSeed = map (\x -> (x, []))
 
@@ -85,7 +96,9 @@ getChildBlockSeeds blockSpan = addChildBlocks
   where
     addChildBlocks [] = []
     addChildBlocks (x : xs) = case x of
-      Automerge.BlockSpan currentSpan | Automerge.isParent blockSpan currentSpan -> createChildBlockSeed currentSpan xs : addChildBlocks xs
+      -- Note that we will enter this case even when `blockSpan` is `Nothing`.
+      -- In this case, `Automerge.isParent` will return true for the top-level blocks.
+      Automerge.BlockSpan currentSpan | Automerge.isParent blockSpan currentSpan && (not $ isEmbed currentSpan) -> createChildBlockSeed currentSpan xs : addChildBlocks xs
       _ -> addChildBlocks xs
       where
         createChildBlockSeed :: BlockSpan -> [Automerge.Span] -> (Automerge.Span, [Automerge.Span])
@@ -93,13 +106,15 @@ getChildBlockSeeds blockSpan = addChildBlocks
         createChildBlockSeed blSpan restSpans = (Automerge.BlockSpan blSpan, Automerge.takeUntilNextSameBlockTypeSibling blSpan restSpans)
 
 buildBlockNode :: BlockMarker -> BlockNode
-buildBlockNode blockMarker = case blockMarker of
+buildBlockNode marker = case marker of
   Automerge.ParagraphMarker -> PandocBlock $ Pandoc.Para []
   Automerge.HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Pandoc.Header level nullAttr []
   Automerge.CodeBlockMarker -> PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
   Automerge.UnorderedListItemMarker -> BulletListItem
   Automerge.OrderedListItemMarker -> OrderedListItem
   Automerge.BlockQuoteMarker -> PandocBlock $ Pandoc.BlockQuote []
+  Automerge.NoteRefMarker (Automerge.NoteId noteId) -> NoteRef (PandocReader.NoteId noteId)
+  Automerge.NoteContentMarker (Automerge.NoteId noteId) -> NoteContent (PandocReader.NoteId noteId)
   _ -> undefined -- more blocks to be implemented
 
 convertTextSpan :: Automerge.TextSpan -> Pandoc.Inlines
@@ -151,6 +166,44 @@ listItemInGroup (Node (BlockNode (BulletListItem)) _) = True
 listItemInGroup (Node (BlockNode (OrderedListItem)) _) = True
 listItemInGroup _ = False
 
+mapNotesToPandocNotes :: Tree DocNode -> Tree DocNode
+mapNotesToPandocNotes tree = pruneNonPandocNodeNotes $ replaceNoteRefsWithPandocNotes noteContentsMap tree
+  where
+    noteContentsMap = buildNoteContentsMap tree
+
+type NoteContentsMap = M.Map PandocReader.NoteId (Tree DocNode)
+
+buildNoteContentsMap :: Tree DocNode -> NoteContentsMap
+buildNoteContentsMap subtree@(Node node children) = case node of
+  BlockNode (NoteContent noteId) -> M.insert noteId subtree childMaps
+  _ -> childMaps
+  where
+    childMaps = M.unions (map buildNoteContentsMap children)
+
+replaceNoteRefsWithPandocNotes :: NoteContentsMap -> Tree DocNode -> Tree DocNode
+replaceNoteRefsWithPandocNotes noteContentsMap = replaceNoteRefs
+  where
+    replaceNoteRefs (Node (BlockNode (NoteRef noteId)) _) =
+      case M.lookup noteId noteContentsMap of
+        Just (Node _ noteContents) ->
+          Node (InlineNode (singleton $ Pandoc.Note [])) noteContents
+        Nothing ->
+          -- Leave as an orphan ref; will be pruned later
+          Node (BlockNode (NoteRef noteId)) []
+    -- Non-ref nodes remain the same. Call `replaceNoteRefs` recursively for their children.
+    replaceNoteRefs (Node node children) = Node node $ map replaceNoteRefs children
+
+pruneNonPandocNodeNotes :: Tree DocNode -> Tree DocNode
+pruneNonPandocNodeNotes (Node node children) = Node node prunedChildren
+  where
+    prunedChildren = [pruneNonPandocNodeNotes child | child <- children, not (isNoteContentNode child || isNoteRefNode child)]
+      where
+        isNoteRefNode (Node (BlockNode (NoteRef _)) _) = True
+        isNoteRefNode _ = False
+
+        isNoteContentNode (Node (BlockNode (NoteContent _)) _) = True
+        isNoteContentNode _ = False
+
 treeToPandocBlocks :: Tree DocNode -> Either PandocError Pandoc.Blocks
 treeToPandocBlocks tree = sequenceA (foldTree treeNodeToPandocBlock tree) >>= getBlockSeq
 
@@ -173,8 +226,16 @@ treeNodeToPandocBlock node childrenNodes = case node of
   (BlockNode (PandocBlock (Pandoc.BulletList _))) -> [fmap (BlockElement . Pandoc.BulletList) (mapToChildBlocks childrenNodes)]
   (BlockNode (PandocBlock (Pandoc.OrderedList attrs _))) -> [fmap (BlockElement . Pandoc.OrderedList attrs) (mapToChildBlocks childrenNodes)]
   (BlockNode (PandocBlock (Pandoc.BlockQuote _))) -> [fmap (BlockElement . Pandoc.BlockQuote) (traverseAssertingChildIsBlock . wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes)]
-  (InlineNode inlines) -> [Right $ InlineElement inlines]
-  -- TODO: Remove when all block types are handled
+  (BlockNode (NoteRef _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note ref node"]
+  (BlockNode (NoteContent _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note content node"]
+  (InlineNode inlines) -> case Pandoc.toList inlines of
+    -- A note can have block children, so it needs different handling compared to other inline nodes.
+    -- We assume that Inline nodes contain a note only contain a single element since we are creating them in this module (see `replaceNoteRefsWithPandocNotes`).
+    [Pandoc.Note []] ->
+      [fmap (InlineElement . Pandoc.singleton . Pandoc.Note) (traverseAssertingChildIsBlock . wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes)]
+    -- In the generic case for inlines, just wrap them with a list of a single `InlineElement`.
+    _ ->
+      [Right $ InlineElement inlines]
   _ -> undefined
   where
     concatChildrenInlines :: [[Either PandocError BlockOrInlines]] -> Either PandocError Pandoc.Inlines
