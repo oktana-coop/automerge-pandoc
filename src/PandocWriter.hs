@@ -93,7 +93,7 @@ inlineToAutomergeSpans parents inline = case inline of
         noteIdText = T.pack $ show newNoteId
 
     -- Convert note blocks to spans
-    noteContentChildBlockSpans <- blocksToAutomergeSpans parents noteBlocks
+    noteContentChildBlockSpans <- blocksToAutomergeSpans [NoteContentType] noteBlocks
     let noteContentSpan = Automerge.BlockSpan $ AutomergeBlock (NoteContentMarker $ Automerge.NoteId noteIdText) [] False
         noteContentSpans = noteContentSpan : noteContentChildBlockSpans
 
