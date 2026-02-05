@@ -10,8 +10,7 @@ import Data.List.NonEmpty (NonEmpty (..), nonEmpty, toList)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import Data.Tree (Tree (Node), drawTree, foldTree, unfoldForest)
-import Debug.Trace
+import Data.Tree (Tree (Node), foldTree, unfoldForest)
 import Text.Pandoc (PandocError (PandocParseError, PandocSyntaxMapError), ReaderOptions)
 import Text.Pandoc.Builder as Pandoc
   ( Block (..),
@@ -65,11 +64,8 @@ data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem | N
 
 data DocNode = Root | BlockNode BlockNode | InlineNode Pandoc.Inlines deriving (Show)
 
-traceTree :: Tree DocNode -> Tree DocNode
-traceTree tree = Debug.Trace.trace (drawTree $ fmap show tree) tree
-
 buildTree :: [Automerge.Span] -> Maybe (Tree DocNode)
-buildTree = (fmap (traceTree . mapNotesToPandocNotes . groupListItems . buildRawTree)) . nonEmpty
+buildTree = (fmap (mapNotesToPandocNotes . groupListItems . buildRawTree)) . nonEmpty
 
 buildRawTree :: NonEmpty Automerge.Span -> Tree DocNode
 buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSeeds spansList

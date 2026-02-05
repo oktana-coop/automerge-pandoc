@@ -28,6 +28,7 @@ library
       PandocReader
       PandocWriter
   other-modules:
+      Utils.Debug
       Utils.JSON
       Utils.Sequence
   hs-source-dirs:

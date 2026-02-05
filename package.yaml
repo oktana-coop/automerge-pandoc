@@ -43,6 +43,7 @@ library:
     - containers >= 0.7
     - mtl >= 2.3.1
   other-modules:
+    - Utils.Debug
     - Utils.JSON
     - Utils.Sequence
 
