@@ -4,7 +4,7 @@ CLI tool that converts [Automerge rich text](https://automerge.org/docs/referenc
 
 ## A Note on Maturity
 
-Not all Automerge rich text features are supported yet and most probably some corner cases are not handled properly yet. Importantly, images are not implemented yet. Same with the code block language attribute. Incrementally, this repo will be extended to cover the [Automerge Rich Text schema](https://automerge.org/docs/under-the-hood/rich_text_schema/) and then to reach feature parity with some important rich text representations such as Markdown.
+Not all Automerge rich text features are supported yet and most probably some corner cases are not handled properly yet. Importantly, images are not implemented yet. Incrementally, this repo will be extended to cover the [Automerge Rich Text schema](https://automerge.org/docs/under-the-hood/rich_text_schema/) and then to reach feature parity with some important rich text representations such as Markdown.
 
 ## How it Works
 

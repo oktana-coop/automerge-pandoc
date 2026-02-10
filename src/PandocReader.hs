@@ -2,7 +2,7 @@
 
 module PandocReader (toPandoc, readAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isEmbed, isParent, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
+import Automerge (BlockMarker (..), BlockSpan (..), CodeBlock (..), CodeBlockLanguage (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isEmbed, isParent, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
 import Control.Monad ((>=>))
 import Control.Monad.Except (throwError)
 import Data.List (find, groupBy)
@@ -105,7 +105,8 @@ buildBlockNode :: BlockMarker -> BlockNode
 buildBlockNode marker = case marker of
   Automerge.ParagraphMarker -> PandocBlock $ Pandoc.Para []
   Automerge.HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Pandoc.Header level nullAttr []
-  Automerge.CodeBlockMarker -> PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
+  Automerge.CodeBlockMarker (Automerge.CodeBlock (Nothing)) -> PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
+  Automerge.CodeBlockMarker (Automerge.CodeBlock (Just (CodeBlockLanguage language))) -> PandocBlock $ Pandoc.CodeBlock ("", [language], []) T.empty
   Automerge.UnorderedListItemMarker -> BulletListItem
   Automerge.OrderedListItemMarker -> OrderedListItem
   Automerge.BlockQuoteMarker -> PandocBlock $ Pandoc.BlockQuote []

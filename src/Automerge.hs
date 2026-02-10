@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, parseAutomergeSpansText, Span (..), BlockMarker (..), Heading (..), HeadingLevel (..), NoteId (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilNonEmbedBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
+module Automerge (parseAutomergeSpans, parseAutomergeSpansText, Span (..), BlockMarker (..), CodeBlock (..), CodeBlockLanguage (..), Heading (..), HeadingLevel (..), NoteId (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilNonEmbedBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
 
 import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, Null, String), eitherDecode, eitherDecodeStrictText, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
@@ -43,6 +43,13 @@ instance FromJSON HeadingLevel where
       else fail "Invalid heading level"
 
 newtype Heading = Heading HeadingLevel deriving (Show, Eq)
+
+newtype CodeBlockLanguage = CodeBlockLanguage T.Text deriving (Show, Eq)
+
+instance FromJSON CodeBlockLanguage where
+  parseJSON = withText "CodeBlockLanguage" $ \language -> pure $ CodeBlockLanguage language
+
+newtype CodeBlock = CodeBlock (Maybe CodeBlockLanguage) deriving (Show, Eq)
 
 newtype NoteId = NoteId T.Text deriving (Show, Eq)
 
@@ -93,7 +100,7 @@ instance ToJSON BlockType where
 data BlockMarker
   = ParagraphMarker
   | HeadingMarker Heading
-  | CodeBlockMarker
+  | CodeBlockMarker CodeBlock
   | BlockQuoteMarker
   | OrderedListItemMarker
   | UnorderedListItemMarker
@@ -115,7 +122,7 @@ data BlockSpan = AutomergeBlock {blockMarker :: BlockMarker, parentTypes :: [Blo
 blockType :: BlockSpan -> BlockType
 blockType (AutomergeBlock (ParagraphMarker) _ _) = ParagraphType
 blockType (AutomergeBlock (HeadingMarker _) _ _) = HeadingType
-blockType (AutomergeBlock (CodeBlockMarker) _ _) = CodeBlockType
+blockType (AutomergeBlock (CodeBlockMarker _) _ _) = CodeBlockType
 blockType (AutomergeBlock (BlockQuoteMarker) _ _) = BlockQuoteType
 blockType (AutomergeBlock (OrderedListItemMarker) _ _) = OrderedListItemType
 blockType (AutomergeBlock (UnorderedListItemMarker) _ _) = UnorderedListItemType
@@ -148,7 +155,12 @@ parseBlock v = do
       attrs <- blockData .: "attrs"
       level <- attrs .: "level"
       pure $ BlockSpan $ AutomergeBlock (HeadingMarker $ Heading $ HeadingLevel level) parents embed
-    CodeBlockType -> pure $ BlockSpan $ AutomergeBlock CodeBlockMarker parents embed
+    CodeBlockType -> do
+      attrs <- blockData .: "attrs"
+      maybeLanguage <- attrs .:? "language"
+      case maybeLanguage of
+        Nothing -> pure $ BlockSpan $ AutomergeBlock (CodeBlockMarker $ CodeBlock Nothing) parents embed
+        Just language -> pure $ BlockSpan $ AutomergeBlock (CodeBlockMarker $ CodeBlock $ Just (CodeBlockLanguage language)) parents embed
     BlockQuoteType -> pure $ BlockSpan $ AutomergeBlock BlockQuoteMarker parents embed
     OrderedListItemType -> pure $ BlockSpan $ AutomergeBlock OrderedListItemMarker parents embed
     UnorderedListItemType -> pure $ BlockSpan $ AutomergeBlock UnorderedListItemMarker parents embed
@@ -200,7 +212,7 @@ instance ToJSON Span where
               [ "isEmbed" .= embed,
                 "parents" .= parents,
                 "type" .= T.pack "paragraph",
-                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+                "attrs" .= toJSON (KM.empty :: KM.KeyMap T.Text)
               ]
         ]
     HeadingMarker (Heading (HeadingLevel level)) ->
@@ -214,7 +226,7 @@ instance ToJSON Span where
                 "attrs" .= object ["level" .= level]
               ]
         ]
-    CodeBlockMarker ->
+    CodeBlockMarker (CodeBlock (maybeCodeBlockLanguage)) ->
       object
         [ "type" .= T.pack "block",
           "value"
@@ -222,7 +234,9 @@ instance ToJSON Span where
               [ "isEmbed" .= embed,
                 "parents" .= parents,
                 "type" .= T.pack "code-block",
-                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+                "attrs" .= case maybeCodeBlockLanguage of
+                  Nothing -> toJSON (KM.empty :: KM.KeyMap T.Text)
+                  Just (CodeBlockLanguage language) -> object ["language" .= language]
               ]
         ]
     BlockQuoteMarker ->
@@ -233,7 +247,7 @@ instance ToJSON Span where
               [ "isEmbed" .= embed,
                 "parents" .= ([] :: [T.Text]),
                 "type" .= T.pack "blockquote",
-                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+                "attrs" .= toJSON (KM.empty :: KM.KeyMap T.Text)
               ]
         ]
     OrderedListItemMarker ->
@@ -244,7 +258,7 @@ instance ToJSON Span where
               [ "isEmbed" .= embed,
                 "parents" .= parents,
                 "type" .= T.pack "ordered-list-item",
-                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+                "attrs" .= toJSON (KM.empty :: KM.KeyMap T.Text)
               ]
         ]
     UnorderedListItemMarker ->
@@ -255,7 +269,7 @@ instance ToJSON Span where
               [ "isEmbed" .= embed,
                 "parents" .= parents,
                 "type" .= T.pack "unordered-list-item",
-                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+                "attrs" .= toJSON (KM.empty :: KM.KeyMap T.Text)
               ]
         ]
     ImageBlockMarker ->

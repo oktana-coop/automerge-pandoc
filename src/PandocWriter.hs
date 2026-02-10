@@ -1,11 +1,11 @@
 module PandocWriter (writeAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), toJSONText)
+import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), CodeBlock (..), CodeBlockLanguage (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), toJSONText)
 import Control.Monad.State (State, get, modify, runState)
 import qualified Data.Text as T
 import Text.Pandoc (WriterOptions)
 import Text.Pandoc.Class (PandocMonad)
-import Text.Pandoc.Definition as Pandoc (Block (..), Inline (..), Pandoc (Pandoc))
+import Text.Pandoc.Definition as Pandoc (Attr, Block (..), Inline (..), Pandoc (Pandoc))
 
 data ContainerBlockType = BulletListItem | OrderedListItem | BlockQuote deriving (Show, Eq)
 
@@ -47,9 +47,9 @@ blockToAutomergeSpans parentBlockTypes block = case block of
     inlineSpans <- inlinesToAutomergeSpans (parentBlockTypes <> [HeadingType]) inlines
     let blockSpan = Automerge.BlockSpan $ AutomergeBlock (Automerge.HeadingMarker $ Heading $ HeadingLevel level) parentBlockTypes False
     return (blockSpan : inlineSpans)
-  Pandoc.CodeBlock _ text ->
+  Pandoc.CodeBlock attr text ->
     return
-      [ Automerge.BlockSpan $ AutomergeBlock Automerge.CodeBlockMarker parentBlockTypes False,
+      [ Automerge.BlockSpan $ AutomergeBlock (Automerge.CodeBlockMarker $ Automerge.CodeBlock $ codeBlockLanguageFromPandocAttr attr) parentBlockTypes False,
         Automerge.TextSpan $ AutomergeText text []
       ]
   Pandoc.BulletList items ->
@@ -59,6 +59,12 @@ blockToAutomergeSpans parentBlockTypes block = case block of
   Pandoc.BlockQuote blocks ->
     containerBlockToAutomergeSpans parentBlockTypes PandocWriter.BlockQuote blocks
   _ -> return [] -- Ignore blocks we don't recognize
+
+codeBlockLanguageFromPandocAttr :: Pandoc.Attr -> Maybe CodeBlockLanguage
+codeBlockLanguageFromPandocAttr (_, classes, _) = case classes of
+  [] -> Nothing
+  -- Assuming language is the first class in Pandoc class attributes.
+  language : _ -> Just $ Automerge.CodeBlockLanguage language
 
 containerBlockToAutomergeSpans :: [Automerge.BlockType] -> ContainerBlockType -> [Pandoc.Block] -> NotesState [Automerge.Span]
 containerBlockToAutomergeSpans parents itemType children = do
