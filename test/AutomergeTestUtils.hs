@@ -1,6 +1,6 @@
 module AutomergeTestUtils (paragraphSpan, heading1Span, heading2Span, heading3Span, heading4Span, heading5Span, heading6Span, textSpan, strongTextSpan, emphasisTextSpan, codeTextSpan, textSpanWithMarks, linkTextSpan, codeBlockSpan, blockQuoteSpan, orderedListItemSpan, unorderedListItemSpan, noteRefSpan, noteContentSpan) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..))
+import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), CodeBlock (CodeBlock), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..))
 import qualified Data.Text as T
 
 paragraphSpan :: [BlockType] -> Span
@@ -49,7 +49,7 @@ orderedListItemSpan :: [BlockType] -> Span
 orderedListItemSpan parents = BlockSpan $ AutomergeBlock OrderedListItemMarker parents False
 
 codeBlockSpan :: [BlockType] -> Span
-codeBlockSpan parents = BlockSpan $ AutomergeBlock CodeBlockMarker parents False
+codeBlockSpan parents = BlockSpan $ AutomergeBlock (CodeBlockMarker $ CodeBlock Nothing) parents False
 
 blockQuoteSpan :: [BlockType] -> Span
 blockQuoteSpan parents = BlockSpan $ AutomergeBlock BlockQuoteMarker parents False
