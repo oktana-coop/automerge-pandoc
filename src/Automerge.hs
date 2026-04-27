@@ -66,6 +66,7 @@ data BlockType
   | OrderedListItemType
   | UnorderedListItemType
   | ImageType
+  | HorizontalRuleType
   | NoteRefType
   | NoteContentType
   deriving (Show, Eq)
@@ -80,6 +81,7 @@ instance FromJSON BlockType where
     "ordered-list-item" -> pure OrderedListItemType
     "unordered-list-item" -> pure UnorderedListItemType
     "image" -> pure ImageType
+    "horizontal-rule" -> pure HorizontalRuleType
     "__ext__note_ref" -> pure NoteRefType
     "__ext__note_content" -> pure NoteContentType
     _ -> fail "Invalid block type"
@@ -94,6 +96,7 @@ instance ToJSON BlockType where
     OrderedListItemType -> String "ordered-list-item"
     UnorderedListItemType -> String "unordered-list-item"
     ImageType -> String "image"
+    HorizontalRuleType -> String "horizontal-rule"
     NoteRefType -> String "__ext__note_ref"
     NoteContentType -> String "__ext__note_content"
 
@@ -105,6 +108,7 @@ data BlockMarker
   | OrderedListItemMarker
   | UnorderedListItemMarker
   | ImageBlockMarker
+  | HorizontalRuleMarker
   | NoteRefMarker NoteId
   | NoteContentMarker NoteId
   deriving (Show, Eq)
@@ -127,6 +131,7 @@ blockType (AutomergeBlock (BlockQuoteMarker) _ _) = BlockQuoteType
 blockType (AutomergeBlock (OrderedListItemMarker) _ _) = OrderedListItemType
 blockType (AutomergeBlock (UnorderedListItemMarker) _ _) = UnorderedListItemType
 blockType (AutomergeBlock (ImageBlockMarker) _ _) = ImageType
+blockType (AutomergeBlock (HorizontalRuleMarker) _ _) = HorizontalRuleType
 blockType (AutomergeBlock (NoteRefMarker _) _ _) = NoteRefType
 blockType (AutomergeBlock (NoteContentMarker _) _ _) = NoteContentType
 
@@ -165,6 +170,7 @@ parseBlock v = do
     OrderedListItemType -> pure $ BlockSpan $ AutomergeBlock OrderedListItemMarker parents embed
     UnorderedListItemType -> pure $ BlockSpan $ AutomergeBlock UnorderedListItemMarker parents embed
     ImageType -> pure $ BlockSpan $ AutomergeBlock ImageBlockMarker parents embed
+    HorizontalRuleType -> pure $ BlockSpan $ AutomergeBlock HorizontalRuleMarker parents embed
     NoteRefType -> do
       attrs <- blockData .: "attrs"
       noteId <- attrs .: "id"
@@ -281,6 +287,17 @@ instance ToJSON Span where
                 "parents" .= parents,
                 "type" .= T.pack "image",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+              ]
+        ]
+    HorizontalRuleMarker ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= embed,
+                "parents" .= parents,
+                "type" .= T.pack "horizontal-rule",
+                "attrs" .= toJSON (KM.empty :: KM.KeyMap T.Text)
               ]
         ]
     NoteRefMarker (NoteId noteId) ->
