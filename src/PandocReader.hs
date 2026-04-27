@@ -110,6 +110,7 @@ buildBlockNode marker = case marker of
   Automerge.UnorderedListItemMarker -> BulletListItem
   Automerge.OrderedListItemMarker -> OrderedListItem
   Automerge.BlockQuoteMarker -> PandocBlock $ Pandoc.BlockQuote []
+  Automerge.HorizontalRuleMarker -> PandocBlock $ Pandoc.HorizontalRule
   Automerge.NoteRefMarker (Automerge.NoteId noteId) -> NoteRef (PandocReader.NoteId noteId)
   Automerge.NoteContentMarker (Automerge.NoteId noteId) -> NoteContent (PandocReader.NoteId noteId)
   _ -> undefined -- more blocks to be implemented
@@ -223,6 +224,7 @@ treeNodeToPandocBlock node childrenNodes = case node of
   (BlockNode (PandocBlock (Pandoc.BulletList _))) -> [fmap (BlockElement . Pandoc.BulletList) (mapToChildBlocks childrenNodes)]
   (BlockNode (PandocBlock (Pandoc.OrderedList attrs _))) -> [fmap (BlockElement . Pandoc.OrderedList attrs) (mapToChildBlocks childrenNodes)]
   (BlockNode (PandocBlock (Pandoc.BlockQuote _))) -> [fmap (BlockElement . Pandoc.BlockQuote) (traverseAssertingChildIsBlock . wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes)]
+  (BlockNode (PandocBlock (Pandoc.HorizontalRule))) -> [Right $ BlockElement Pandoc.HorizontalRule]
   (BlockNode (NoteRef _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note ref node"]
   (BlockNode (NoteContent _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note content node"]
   (InlineNode inlines) -> case Pandoc.toList inlines of

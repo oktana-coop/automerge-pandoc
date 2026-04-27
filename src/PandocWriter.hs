@@ -58,6 +58,7 @@ blockToAutomergeSpans parentBlockTypes block = case block of
     concat <$> mapM (containerBlockToAutomergeSpans parentBlockTypes OrderedListItem) items
   Pandoc.BlockQuote blocks ->
     containerBlockToAutomergeSpans parentBlockTypes PandocWriter.BlockQuote blocks
+  Pandoc.HorizontalRule -> return [Automerge.BlockSpan $ AutomergeBlock HorizontalRuleMarker parentBlockTypes False]
   _ -> return [] -- Ignore blocks we don't recognize
 
 codeBlockLanguageFromPandocAttr :: Pandoc.Attr -> Maybe CodeBlockLanguage

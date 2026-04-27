@@ -3,12 +3,12 @@
 module PandocReaderTest (tests) where
 
 import Automerge as A (BlockType (..), Mark (..))
-import AutomergeTestUtils as Automerge (blockQuoteSpan, codeTextSpan, emphasisTextSpan, heading1Span, heading2Span, heading4Span, linkTextSpan, noteContentSpan, noteRefSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
+import AutomergeTestUtils as Automerge (blockQuoteSpan, codeTextSpan, emphasisTextSpan, heading1Span, heading2Span, heading4Span, horizontalRuleSpan, linkTextSpan, noteContentSpan, noteRefSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
 import PandocReader (toPandoc)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hspec (testSpec)
-import Text.Pandoc.Builder as Pandoc (blockQuote, bulletList, code, doc, emph, fromList, header, link, note, orderedList, para, plain, str, strong, toList)
+import Text.Pandoc.Builder as Pandoc (blockQuote, bulletList, code, doc, emph, fromList, header, horizontalRule, link, note, orderedList, para, plain, str, strong, toList)
 import Text.Pandoc.Class (runIO)
 
 tests :: IO TestTree
@@ -484,6 +484,31 @@ spec = do
                             toList $ (Pandoc.para $ str "You fritter and waste the hours in an offhand way")
                           ],
                   toList $ Pandoc.para $ Pandoc.str "Paragraph below the blockquote"
+                ]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+  describe "HorizontalRule" $ do
+    it "handles a horizontal rule between paragraphs" $ do
+      let input =
+            [ Automerge.heading1Span [],
+              Automerge.textSpan "A Heading 1",
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "A paragraph",
+              Automerge.horizontalRuleSpan [],
+              Automerge.paragraphSpan [],
+              Automerge.textSpan "Another paragraph"
+            ]
+
+          expected =
+            fromList $
+              concat
+                [ toList $ Pandoc.header 1 $ Pandoc.str "A Heading 1",
+                  toList $ Pandoc.para $ Pandoc.str "A paragraph",
+                  toList $ Pandoc.horizontalRule,
+                  toList $ Pandoc.para $ Pandoc.str "Another paragraph"
                 ]
 
       result <- runIO $ toPandoc input
