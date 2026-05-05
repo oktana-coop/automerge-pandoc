@@ -1,7 +1,9 @@
 import PandocReaderTest as Reader (tests)
+import PandocWriterTest as Writer (tests)
 import Test.Tasty (defaultMain, testGroup)
 
 main :: IO ()
 main = do
   readerTests <- Reader.tests
-  defaultMain $ testGroup "Tests" [readerTests]
+  writerTests <- Writer.tests
+  defaultMain $ testGroup "Tests" [readerTests, writerTests]
