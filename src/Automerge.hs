@@ -47,7 +47,6 @@ newtype Heading = Heading HeadingLevel deriving (Show, Eq)
 newtype CodeBlockLanguage = CodeBlockLanguage T.Text deriving (Show, Eq)
 
 instance FromJSON CodeBlockLanguage where
-  parseJSON :: Value -> Parser CodeBlockLanguage
   parseJSON = withText "CodeBlockLanguage" $ \language -> pure $ CodeBlockLanguage language
 
 newtype CodeBlock = CodeBlock (Maybe CodeBlockLanguage) deriving (Show, Eq)

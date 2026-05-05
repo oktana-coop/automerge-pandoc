@@ -34,7 +34,7 @@ emphasisTextSpan :: String -> Span
 emphasisTextSpan str = TextSpan $ AutomergeText (T.pack str) [Emphasis]
 
 linkTextSpan :: String -> String -> String -> Span
-linkTextSpan txt linkUrl linkTitle = TextSpan $ AutomergeText (T.pack txt) [LinkMark $ Link (T.pack linkUrl) (T.pack linkTitle)]
+linkTextSpan txt linkUrl linkTtl = TextSpan $ AutomergeText (T.pack txt) [LinkMark $ Link (T.pack linkUrl) (T.pack linkTtl)]
 
 codeTextSpan :: String -> Span
 codeTextSpan str = TextSpan $ AutomergeText (T.pack str) [Code]
