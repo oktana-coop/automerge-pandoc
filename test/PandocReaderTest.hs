@@ -3,12 +3,12 @@
 module PandocReaderTest (tests) where
 
 import Automerge as A (BlockType (..), Mark (..))
-import AutomergeTestUtils as Automerge (blockQuoteSpan, codeTextSpan, emphasisTextSpan, heading1Span, heading2Span, heading4Span, horizontalRuleSpan, linkTextSpan, noteContentSpan, noteRefSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
+import AutomergeTestUtils as Automerge (blockQuoteSpan, captionSpan, codeTextSpan, emphasisTextSpan, figureSpan, heading1Span, heading2Span, heading4Span, horizontalRuleSpan, imageSpan, linkTextSpan, noteContentSpan, noteRefSpan, orderedListItemSpan, paragraphSpan, strongTextSpan, textSpan, textSpanWithMarks, unorderedListItemSpan)
 import PandocReader (toPandoc)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hspec (testSpec)
-import Text.Pandoc.Builder as Pandoc (blockQuote, bulletList, code, doc, emph, fromList, header, horizontalRule, link, note, orderedList, para, plain, str, strong, toList)
+import Text.Pandoc.Builder as Pandoc (blockQuote, bulletList, caption, code, doc, emph, emptyCaption, figure, fromList, header, horizontalRule, image, link, note, orderedList, para, plain, simpleCaption, str, strong, toList)
 import Text.Pandoc.Class (runIO)
 
 tests :: IO TestTree
@@ -515,6 +515,205 @@ spec = do
       case result of
         Left err -> expectationFailure ("toPandoc failed: " <> show err)
         Right actual -> actual `shouldBe` Pandoc.doc expected
+
+  describe "Images" $ do
+    it "handles an image inside a paragraph" $ do
+      let input =
+            [ Automerge.paragraphSpan [],
+              Automerge.textSpan "Before image ",
+              Automerge.imageSpan [A.ParagraphType] "image.png" Nothing (Just "alt"),
+              Automerge.textSpan " after image"
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.para $
+                  Pandoc.str "Before image "
+                    <> Pandoc.image "image.png" "" (Pandoc.str "alt")
+                    <> Pandoc.str " after image"
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles an image with no alt text or title" $ do
+      let input =
+            [ Automerge.paragraphSpan [],
+              Automerge.imageSpan [A.ParagraphType] "image.png" Nothing Nothing
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.para $ Pandoc.image "image.png" "" mempty
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles an image with title and alt text" $ do
+      let input =
+            [ Automerge.paragraphSpan [],
+              Automerge.imageSpan [A.ParagraphType] "image.png" (Just "Image title") (Just "alt")
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.para $ Pandoc.image "image.png" "Image title" (Pandoc.str "alt")
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles an image with only a title" $ do
+      let input =
+            [ Automerge.paragraphSpan [],
+              Automerge.imageSpan [A.ParagraphType] "image.png" (Just "Image title") Nothing
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.para $ Pandoc.image "image.png" "Image title" mempty
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "wraps an image in a Plain block when it appears inside a list item" $ do
+      let input =
+            [ Automerge.unorderedListItemSpan [],
+              Automerge.imageSpan [A.UnorderedListItemType] "image.png" Nothing (Just "alt")
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.bulletList
+                  [Pandoc.plain $ Pandoc.image "image.png" "" (Pandoc.str "alt")]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+  describe "Figures" $ do
+    it "handles a figure with an image and no caption" $ do
+      let input =
+            [ Automerge.figureSpan [],
+              Automerge.imageSpan [A.FigureType] "image.png" Nothing (Just "alt")
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.figure
+                  Pandoc.emptyCaption
+                  (Pandoc.plain $ Pandoc.image "image.png" "" (Pandoc.str "alt"))
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles a figure with a short caption" $ do
+      let input =
+            [ Automerge.figureSpan [],
+              Automerge.imageSpan [A.FigureType] "image.png" Nothing (Just "alt"),
+              Automerge.captionSpan [A.FigureType],
+              Automerge.textSpan "A short caption"
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.figure
+                  (Pandoc.caption (Just $ Pandoc.toList $ Pandoc.str "A short caption") mempty)
+                  (Pandoc.plain $ Pandoc.image "image.png" "" (Pandoc.str "alt"))
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles a figure with a block caption" $ do
+      let input =
+            [ Automerge.figureSpan [],
+              Automerge.imageSpan [A.FigureType] "image.png" Nothing (Just "alt"),
+              Automerge.captionSpan [A.FigureType],
+              Automerge.paragraphSpan [A.FigureType, A.CaptionType],
+              Automerge.textSpan "A caption paragraph"
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.figure
+                  (Pandoc.simpleCaption (Pandoc.para $ Pandoc.str "A caption paragraph"))
+                  (Pandoc.plain $ Pandoc.image "image.png" "" (Pandoc.str "alt"))
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles a figure with a multi-paragraph block caption" $ do
+      let input =
+            [ Automerge.figureSpan [],
+              Automerge.imageSpan [A.FigureType] "image.png" Nothing (Just "alt"),
+              Automerge.captionSpan [A.FigureType],
+              Automerge.paragraphSpan [A.FigureType, A.CaptionType],
+              Automerge.textSpan "First caption paragraph",
+              Automerge.paragraphSpan [A.FigureType, A.CaptionType],
+              Automerge.textSpan "Second caption paragraph"
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.figure
+                  ( Pandoc.simpleCaption $
+                      Pandoc.para (Pandoc.str "First caption paragraph")
+                        <> Pandoc.para (Pandoc.str "Second caption paragraph")
+                  )
+                  (Pandoc.plain $ Pandoc.image "image.png" "" (Pandoc.str "alt"))
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
+    it "handles a figure with both a short and a block caption" $ do
+      let input =
+            [ Automerge.figureSpan [],
+              Automerge.imageSpan [A.FigureType] "image.png" Nothing (Just "alt"),
+              Automerge.captionSpan [A.FigureType],
+              Automerge.textSpan "Short cap",
+              Automerge.paragraphSpan [A.FigureType, A.CaptionType],
+              Automerge.textSpan "Block paragraph"
+            ]
+
+          expected =
+            fromList $
+              toList $
+                Pandoc.figure
+                  ( Pandoc.caption
+                      (Just $ Pandoc.toList $ Pandoc.str "Short cap")
+                      (Pandoc.para $ Pandoc.str "Block paragraph")
+                  )
+                  (Pandoc.plain $ Pandoc.image "image.png" "" (Pandoc.str "alt"))
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left err -> expectationFailure ("toPandoc failed: " <> show err)
+        Right actual -> actual `shouldBe` Pandoc.doc expected
+
   describe "Notes" $ do
     it "converts a note reference and its content into a Pandoc note" $ do
       let noteId = "1"
