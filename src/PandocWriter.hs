@@ -1,13 +1,13 @@
 module PandocWriter (writeAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), CodeBlock (..), CodeBlockLanguage (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), toJSONText)
+import Automerge (BlockMarker (..), BlockSpan (..), BlockType (..), CodeBlock (..), CodeBlockLanguage (..), Heading (..), HeadingLevel (..), Image (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), toJSONText)
 import Control.Monad.State (State, get, modify, runState)
 import qualified Data.Text as T
 import Text.Pandoc (WriterOptions)
 import Text.Pandoc.Class (PandocMonad)
-import Text.Pandoc.Definition as Pandoc (Attr, Block (..), Inline (..), Pandoc (Pandoc))
+import Text.Pandoc.Definition as Pandoc (Attr, Block (..), Caption (..), Inline (..), Pandoc (Pandoc))
 
-data ContainerBlockType = BulletListItem | OrderedListItem | BlockQuote deriving (Show, Eq)
+data ContainerBlockType = BulletListItem | OrderedListItem | BlockQuote | Figure | Caption deriving (Show, Eq)
 
 data NoteData = NoteData
   { noteCounter :: Int,
@@ -21,6 +21,8 @@ toAutomergeBlockType :: ContainerBlockType -> BlockType
 toAutomergeBlockType BulletListItem = Automerge.UnorderedListItemType
 toAutomergeBlockType OrderedListItem = Automerge.OrderedListItemType
 toAutomergeBlockType PandocWriter.BlockQuote = Automerge.BlockQuoteType
+toAutomergeBlockType PandocWriter.Figure = Automerge.FigureType
+toAutomergeBlockType PandocWriter.Caption = Automerge.CaptionType
 
 writeAutomerge :: (PandocMonad m) => WriterOptions -> Pandoc.Pandoc -> m T.Text
 writeAutomerge _ (Pandoc.Pandoc _ blocks) = pure $ toJSONText automergeSpans
@@ -38,7 +40,10 @@ blocksToAutomergeSpans parentBlockTypes blocks = fmap concat (perBlockSpans bloc
 
 blockToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Block -> NotesState [Automerge.Span]
 blockToAutomergeSpans parentBlockTypes block = case block of
-  Pandoc.Plain inlines -> inlinesToAutomergeSpans (parentBlockTypes <> [ParagraphType]) inlines
+  -- Plain has no Automerge marker — its inlines flow into the preceding non-embed block's span sequence.
+  -- Embed inlines (Image, NoteRef) inside a Plain with a non-embed sibling will be attributed to that sibling.
+  -- TODO: revisit — likely needs a Plain marker in the model or a span-level barrier to preserve the wrapper.
+  Pandoc.Plain inlines -> inlinesToAutomergeSpans parentBlockTypes inlines
   Pandoc.Para inlines -> do
     inlineSpans <- inlinesToAutomergeSpans (parentBlockTypes <> [ParagraphType]) inlines
     let blockSpan = Automerge.BlockSpan $ AutomergeBlock ParagraphMarker parentBlockTypes False
@@ -59,7 +64,23 @@ blockToAutomergeSpans parentBlockTypes block = case block of
   Pandoc.BlockQuote blocks ->
     containerBlockToAutomergeSpans parentBlockTypes PandocWriter.BlockQuote blocks
   Pandoc.HorizontalRule -> return [Automerge.BlockSpan $ AutomergeBlock HorizontalRuleMarker parentBlockTypes False]
+  Pandoc.Figure _ figCaption figBlocks -> do
+    let figureSpan = containerBlockToSpan parentBlockTypes PandocWriter.Figure
+        figureChildParents = parentBlockTypes <> [toAutomergeBlockType PandocWriter.Figure]
+    -- Emit figure blocks before the caption so embed blocks (e.g. ImageMarker) attach to the figure, not the caption.
+    blockSpans <- blocksToAutomergeSpans figureChildParents figBlocks
+    captionSpans <- captionToAutomergeSpans figureChildParents figCaption
+    return (figureSpan : blockSpans ++ captionSpans)
   _ -> return [] -- Ignore blocks we don't recognize
+
+captionToAutomergeSpans :: [Automerge.BlockType] -> Pandoc.Caption -> NotesState [Automerge.Span]
+captionToAutomergeSpans _ (Pandoc.Caption Nothing []) = return []
+captionToAutomergeSpans captionParents (Pandoc.Caption maybeShortCap capBlocks) = do
+  let captionSpan = containerBlockToSpan captionParents PandocWriter.Caption
+      childParents = captionParents <> [toAutomergeBlockType PandocWriter.Caption]
+  shortCapSpans <- maybe (return []) (inlinesToAutomergeSpans childParents) maybeShortCap
+  blockSpans <- blocksToAutomergeSpans childParents capBlocks
+  return (captionSpan : shortCapSpans ++ blockSpans)
 
 codeBlockLanguageFromPandocAttr :: Pandoc.Attr -> Maybe CodeBlockLanguage
 codeBlockLanguageFromPandocAttr (_, classes, _) = case classes of
@@ -73,14 +94,17 @@ containerBlockToAutomergeSpans parents itemType children = do
       childParentTypes = parents <> [toAutomergeBlockType itemType]
   childSpans <- fmap concat $ mapM (blockToAutomergeSpans childParentTypes) children
   return (containerSpan : childSpans)
+
+containerBlockToSpan :: [Automerge.BlockType] -> ContainerBlockType -> Automerge.Span
+containerBlockToSpan parents containerType =
+  Automerge.BlockSpan $ AutomergeBlock (containerBlockMarker containerType) parents False
   where
-    containerBlockToSpan :: [Automerge.BlockType] -> ContainerBlockType -> Automerge.Span
-    containerBlockToSpan parentBlockTypes BulletListItem =
-      Automerge.BlockSpan $ AutomergeBlock Automerge.UnorderedListItemMarker parentBlockTypes False
-    containerBlockToSpan parentBlockTypes OrderedListItem =
-      Automerge.BlockSpan $ AutomergeBlock Automerge.OrderedListItemMarker parentBlockTypes False
-    containerBlockToSpan parentBlockTypes PandocWriter.BlockQuote =
-      Automerge.BlockSpan $ AutomergeBlock Automerge.BlockQuoteMarker parentBlockTypes False
+    containerBlockMarker :: ContainerBlockType -> BlockMarker
+    containerBlockMarker BulletListItem = UnorderedListItemMarker
+    containerBlockMarker OrderedListItem = OrderedListItemMarker
+    containerBlockMarker PandocWriter.BlockQuote = BlockQuoteMarker
+    containerBlockMarker PandocWriter.Figure = FigureMarker
+    containerBlockMarker PandocWriter.Caption = CaptionMarker
 
 inlinesToAutomergeSpans :: [Automerge.BlockType] -> [Pandoc.Inline] -> NotesState [Automerge.Span]
 inlinesToAutomergeSpans parents inlines =
@@ -122,9 +146,11 @@ inlineToAutomergeSpans parents inline = case inline of
   Pandoc.Emph inlines -> do
     wrappedSpans <- inlinesToAutomergeSpans parents inlines
     return $ addMark Automerge.Emphasis wrappedSpans
-  Pandoc.Link _ inlines (linkUrl, linkTitle) -> do
+  Pandoc.Link _ inlines (linkUrl, linkTtl) -> do
     wrappedSpans <- inlinesToAutomergeSpans parents inlines
-    return $ addMark (Automerge.LinkMark $ Automerge.Link {url = linkUrl, title = linkTitle}) wrappedSpans
+    return $ addMark (Automerge.LinkMark $ Automerge.Link {url = linkUrl, linkTitle = linkTtl}) wrappedSpans
+  Pandoc.Image _ altInlines (imgUrl, imgTtl) ->
+    return [Automerge.BlockSpan $ AutomergeBlock (ImageMarker $ buildAutomergeImage imgUrl imgTtl altInlines) parents True]
   _ -> return $ Automerge.TextSpan <$> inlineToTextSpan inline
 
 mergeSameMarkSpans :: [Automerge.Span] -> [Automerge.Span]
@@ -138,13 +164,32 @@ mergeSameMarkSpans = foldr mergeOrAppendAdjacent []
           TextSpan (xTextSpan <> firstOrRestTextSpan) : rest
     mergeOrAppendAdjacent x rest = x : rest
 
+extractTextFromInline :: Pandoc.Inline -> T.Text
+extractTextFromInline (Pandoc.Str s) = s
+extractTextFromInline Pandoc.Space = T.pack " "
+extractTextFromInline Pandoc.SoftBreak = T.pack " "
+extractTextFromInline Pandoc.LineBreak = T.pack "\n"
+extractTextFromInline (Pandoc.Code _ txt) = txt
+extractTextFromInline _ = T.empty
+
 inlineToTextSpan :: Pandoc.Inline -> [Automerge.TextSpan]
 inlineToTextSpan inline = case inline of
-  Pandoc.Str str -> [AutomergeText str []]
-  Pandoc.Space -> [AutomergeText (T.pack " ") []]
-  Pandoc.Code _ text -> [AutomergeText text [Automerge.Code]]
+  Pandoc.Str _ -> [AutomergeText (extractTextFromInline inline) []]
+  Pandoc.Space -> [AutomergeText (extractTextFromInline inline) []]
+  Pandoc.SoftBreak -> [AutomergeText (extractTextFromInline inline) []]
+  Pandoc.LineBreak -> [AutomergeText (extractTextFromInline inline) []]
+  Pandoc.Code _ txt -> [AutomergeText txt [Automerge.Code]]
   -- TODO: Handle other inline elements
   _ -> []
+
+buildAutomergeImage :: T.Text -> T.Text -> [Pandoc.Inline] -> Automerge.Image
+buildAutomergeImage imgUrl imgTtl altInlines =
+  Automerge.Image imgUrl (textToMaybe imgTtl) (textToMaybe (extractTextFromInlines altInlines))
+  where
+    textToMaybe t = if T.null t then Nothing else Just t
+
+extractTextFromInlines :: [Pandoc.Inline] -> T.Text
+extractTextFromInlines = foldMap extractTextFromInline
 
 addMark :: Automerge.Mark -> [Automerge.Span] -> [Automerge.Span]
 addMark mark spans = fmap (addMarkToSpan mark) spans

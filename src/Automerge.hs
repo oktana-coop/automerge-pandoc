@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Automerge (parseAutomergeSpans, parseAutomergeSpansText, Span (..), BlockMarker (..), CodeBlock (..), CodeBlockLanguage (..), Heading (..), HeadingLevel (..), NoteId (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilNonEmbedBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
+module Automerge (parseAutomergeSpans, parseAutomergeSpansText, Span (..), BlockMarker (..), CodeBlock (..), CodeBlockLanguage (..), Heading (..), HeadingLevel (..), Image (..), NoteId (..), BlockSpan (..), BlockType (..), TextSpan (..), Mark (..), Link (..), toJSONText, takeUntilNonEmbedBlockSpan, takeUntilNextSameBlockTypeSibling, isTopLevelBlock, isParent, isSiblingListItem) where
 
 import Data.Aeson (FromJSON (parseJSON), Object, ToJSON (toJSON), Value (Bool, Null, String), eitherDecode, eitherDecodeStrictText, encode, object, withObject, withScientific, withText, (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson.Key as K
@@ -15,16 +15,16 @@ import Data.Text.Encoding (decodeUtf8)
 import Utils.JSON (parseNonEmpty, parseStringifiedObject, stringifyObject)
 
 -- TODO: Make title optional
-data Link = Link {url :: T.Text, title :: T.Text} deriving (Show, Eq)
+data Link = Link {url :: T.Text, linkTitle :: T.Text} deriving (Show, Eq)
 
 instance FromJSON Link where
   parseJSON = withObject "Link" $ \v -> do
     linkUrl <- v .: "href" >>= parseNonEmpty "href"
-    linkTitle <- v .: "title"
-    pure Link {url = linkUrl, title = linkTitle}
+    title <- v .: "title"
+    pure Link {url = linkUrl, linkTitle = title}
 
 instance ToJSON Link where
-  toJSON link = object ["href" .= url link, "title" .= title link]
+  toJSON link = object ["href" .= url link, "title" .= linkTitle link]
 
 data Mark
   = Strong
@@ -51,6 +51,18 @@ instance FromJSON CodeBlockLanguage where
 
 newtype CodeBlock = CodeBlock (Maybe CodeBlockLanguage) deriving (Show, Eq)
 
+data Image = Image { src :: T.Text, imageTitle :: Maybe T.Text, alt :: Maybe T.Text } deriving (Show, Eq)
+
+instance ToJSON Image where
+  toJSON image = object ["src" .= src image, "title" .= imageTitle image, "alt" .= alt image]
+
+instance FromJSON Image where
+  parseJSON = withObject "Image" $ \v -> do
+    imageSrc <- v .: "src" >>= parseNonEmpty "src"
+    title <- v .:? "title"
+    imageAlt <- v .:? "alt"
+    pure Image { src = imageSrc, imageTitle = title, alt = imageAlt }
+
 newtype NoteId = NoteId T.Text deriving (Show, Eq)
 
 instance FromJSON NoteId where
@@ -66,6 +78,8 @@ data BlockType
   | OrderedListItemType
   | UnorderedListItemType
   | ImageType
+  | FigureType
+  | CaptionType
   | HorizontalRuleType
   | NoteRefType
   | NoteContentType
@@ -81,6 +95,8 @@ instance FromJSON BlockType where
     "ordered-list-item" -> pure OrderedListItemType
     "unordered-list-item" -> pure UnorderedListItemType
     "image" -> pure ImageType
+    "__ext__figure" -> pure FigureType
+    "__ext__caption" -> pure CaptionType
     "horizontal-rule" -> pure HorizontalRuleType
     "__ext__note_ref" -> pure NoteRefType
     "__ext__note_content" -> pure NoteContentType
@@ -96,6 +112,8 @@ instance ToJSON BlockType where
     OrderedListItemType -> String "ordered-list-item"
     UnorderedListItemType -> String "unordered-list-item"
     ImageType -> String "image"
+    FigureType -> String "__ext__figure"
+    CaptionType -> String "__ext__caption"
     HorizontalRuleType -> String "horizontal-rule"
     NoteRefType -> String "__ext__note_ref"
     NoteContentType -> String "__ext__note_content"
@@ -107,7 +125,9 @@ data BlockMarker
   | BlockQuoteMarker
   | OrderedListItemMarker
   | UnorderedListItemMarker
-  | ImageBlockMarker
+  | ImageMarker Image
+  | FigureMarker
+  | CaptionMarker
   | HorizontalRuleMarker
   | NoteRefMarker NoteId
   | NoteContentMarker NoteId
@@ -130,7 +150,9 @@ blockType (AutomergeBlock (CodeBlockMarker _) _ _) = CodeBlockType
 blockType (AutomergeBlock (BlockQuoteMarker) _ _) = BlockQuoteType
 blockType (AutomergeBlock (OrderedListItemMarker) _ _) = OrderedListItemType
 blockType (AutomergeBlock (UnorderedListItemMarker) _ _) = UnorderedListItemType
-blockType (AutomergeBlock (ImageBlockMarker) _ _) = ImageType
+blockType (AutomergeBlock (ImageMarker _) _ _) = ImageType
+blockType (AutomergeBlock (FigureMarker) _ _) = FigureType
+blockType (AutomergeBlock (CaptionMarker) _ _) = CaptionType
 blockType (AutomergeBlock (HorizontalRuleMarker) _ _) = HorizontalRuleType
 blockType (AutomergeBlock (NoteRefMarker _) _ _) = NoteRefType
 blockType (AutomergeBlock (NoteContentMarker _) _ _) = NoteContentType
@@ -169,7 +191,11 @@ parseBlock v = do
     BlockQuoteType -> pure $ BlockSpan $ AutomergeBlock BlockQuoteMarker parents embed
     OrderedListItemType -> pure $ BlockSpan $ AutomergeBlock OrderedListItemMarker parents embed
     UnorderedListItemType -> pure $ BlockSpan $ AutomergeBlock UnorderedListItemMarker parents embed
-    ImageType -> pure $ BlockSpan $ AutomergeBlock ImageBlockMarker parents embed
+    ImageType -> do
+      img <- blockData .: "attrs"
+      pure $ BlockSpan $ AutomergeBlock (ImageMarker img) parents embed
+    FigureType -> pure $ BlockSpan $ AutomergeBlock FigureMarker parents embed
+    CaptionType -> pure $ BlockSpan $ AutomergeBlock CaptionMarker parents embed
     HorizontalRuleType -> pure $ BlockSpan $ AutomergeBlock HorizontalRuleMarker parents embed
     NoteRefType -> do
       attrs <- blockData .: "attrs"
@@ -278,7 +304,7 @@ instance ToJSON Span where
                 "attrs" .= toJSON (KM.empty :: KM.KeyMap T.Text)
               ]
         ]
-    ImageBlockMarker ->
+    ImageMarker image ->
       object
         [ "type" .= T.pack "block",
           "value"
@@ -286,6 +312,28 @@ instance ToJSON Span where
               [ "isEmbed" .= embed,
                 "parents" .= parents,
                 "type" .= T.pack "image",
+                "attrs" .= toJSON image
+              ]
+        ]
+    FigureMarker ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= embed,
+                "parents" .= parents,
+                "type" .= T.pack "__ext__figure",
+                "attrs" .= (KM.empty :: KM.KeyMap T.Text)
+              ]
+        ]
+    CaptionMarker ->
+      object
+        [ "type" .= T.pack "block",
+          "value"
+            .= object
+              [ "isEmbed" .= embed,
+                "parents" .= parents,
+                "type" .= T.pack "__ext__caption",
                 "attrs" .= (KM.empty :: KM.KeyMap T.Text)
               ]
         ]

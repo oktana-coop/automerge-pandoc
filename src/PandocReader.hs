@@ -2,10 +2,10 @@
 
 module PandocReader (toPandoc, readAutomerge) where
 
-import Automerge (BlockMarker (..), BlockSpan (..), CodeBlock (..), CodeBlockLanguage (..), Heading (..), HeadingLevel (..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isEmbed, isParent, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
+import Automerge (BlockMarker (..), BlockSpan (..), CodeBlock (..), CodeBlockLanguage (..), Heading (..), HeadingLevel (..), Image(..), Link (..), Mark (..), NoteId (..), Span (..), TextSpan (..), isEmbed, isParent, parseAutomergeSpansText, takeUntilNextSameBlockTypeSibling, takeUntilNonEmbedBlockSpan)
 import Control.Monad ((>=>))
 import Control.Monad.Except (throwError)
-import Data.List (find, groupBy)
+import Data.List (find, groupBy, partition)
 import Data.List.NonEmpty (NonEmpty (..), nonEmpty, toList)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -13,13 +13,15 @@ import qualified Data.Text as T
 import Data.Tree (Tree (Node), foldTree, unfoldForest)
 import Text.Pandoc (PandocError (PandocParseError, PandocSyntaxMapError), ReaderOptions)
 import Text.Pandoc.Builder as Pandoc
-  ( Block (..),
+  ( Attr,
+    Block (..),
     Blocks,
     Inline (Note, Str),
     Inlines,
     ListNumberDelim (DefaultDelim),
     ListNumberStyle (DefaultStyle),
     Pandoc,
+    caption,
     code,
     doc,
     emph,
@@ -29,7 +31,7 @@ import Text.Pandoc.Builder as Pandoc
     singleton,
     str,
     strong,
-    toList,
+    toList, image, emptyCaption, Caption,
   )
 import Text.Pandoc.Class (PandocMonad)
 import Text.Pandoc.Sources (ToSources, sourcesToText, toSources)
@@ -60,7 +62,7 @@ toPandoc = (either throwError (pure . Pandoc.doc)) . convertSpansToBlocks
 
 newtype NoteId = NoteId T.Text deriving (Show, Eq, Ord)
 
-data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem | NoteRef PandocReader.NoteId | NoteContent PandocReader.NoteId deriving (Show)
+data BlockNode = PandocBlock Pandoc.Block | BulletListItem | OrderedListItem | Caption | NoteRef PandocReader.NoteId | NoteContent PandocReader.NoteId deriving (Show)
 
 data DocNode = Root | BlockNode BlockNode | InlineNode Pandoc.Inlines deriving (Show)
 
@@ -76,9 +78,9 @@ buildRawTree spans = Node Root $ unfoldForest buildDocNode $ getTopLevelBlockSee
 buildDocNode :: (Automerge.Span, [Automerge.Span]) -> (DocNode, [(Automerge.Span, [Automerge.Span])])
 buildDocNode (currentSpan, remainingSpans) = case currentSpan of
   -- Non-embed block markers
-  (Automerge.BlockSpan blockSpan@(AutomergeBlock marker _ False)) -> (BlockNode $ buildBlockNode marker, getChildSeeds blockSpan remainingSpans)
+  (Automerge.BlockSpan blockSpan@(AutomergeBlock marker _ False)) -> (buildBlockNode marker, getChildSeeds blockSpan remainingSpans)
   -- Embed block markers don't have children
-  (Automerge.BlockSpan (AutomergeBlock marker _ True)) -> (BlockNode $ buildBlockNode marker, [])
+  (Automerge.BlockSpan (AutomergeBlock marker _ True)) -> (buildBlockNode marker, [])
   -- Text spans
   (Automerge.TextSpan textSpan) -> (InlineNode $ convertTextSpan textSpan, [])
 
@@ -101,19 +103,24 @@ getChildBlockSeeds blockSpan = addChildBlocks
         -- We stop seeding when we encounter a same block type sibling so that children don't get added (replicated) to all siblings
         createChildBlockSeed blSpan restSpans = (Automerge.BlockSpan blSpan, Automerge.takeUntilNextSameBlockTypeSibling blSpan restSpans)
 
-buildBlockNode :: BlockMarker -> BlockNode
+buildBlockNode :: BlockMarker -> DocNode
 buildBlockNode marker = case marker of
-  Automerge.ParagraphMarker -> PandocBlock $ Pandoc.Para []
-  Automerge.HeadingMarker (Heading (HeadingLevel level)) -> PandocBlock $ Pandoc.Header level nullAttr []
-  Automerge.CodeBlockMarker (Automerge.CodeBlock (Nothing)) -> PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
-  Automerge.CodeBlockMarker (Automerge.CodeBlock (Just (CodeBlockLanguage language))) -> PandocBlock $ Pandoc.CodeBlock ("", [language], []) T.empty
-  Automerge.UnorderedListItemMarker -> BulletListItem
-  Automerge.OrderedListItemMarker -> OrderedListItem
-  Automerge.BlockQuoteMarker -> PandocBlock $ Pandoc.BlockQuote []
-  Automerge.HorizontalRuleMarker -> PandocBlock $ Pandoc.HorizontalRule
-  Automerge.NoteRefMarker (Automerge.NoteId noteId) -> NoteRef (PandocReader.NoteId noteId)
-  Automerge.NoteContentMarker (Automerge.NoteId noteId) -> NoteContent (PandocReader.NoteId noteId)
-  _ -> undefined -- more blocks to be implemented
+  Automerge.ParagraphMarker -> BlockNode $ PandocBlock $ Pandoc.Para []
+  Automerge.HeadingMarker (Heading (HeadingLevel level)) -> BlockNode $ PandocBlock $ Pandoc.Header level nullAttr []
+  Automerge.CodeBlockMarker (Automerge.CodeBlock (Nothing)) -> BlockNode $ PandocBlock $ Pandoc.CodeBlock nullAttr T.empty
+  Automerge.CodeBlockMarker (Automerge.CodeBlock (Just (CodeBlockLanguage language))) -> BlockNode $ PandocBlock $ Pandoc.CodeBlock ("", [language], []) T.empty
+  Automerge.UnorderedListItemMarker -> BlockNode $ BulletListItem
+  Automerge.OrderedListItemMarker -> BlockNode $ OrderedListItem
+  Automerge.BlockQuoteMarker -> BlockNode $ PandocBlock $ Pandoc.BlockQuote []
+  Automerge.ImageMarker (Automerge.Image imgSrc imgTitle imgAlt) -> InlineNode $ Pandoc.image imgSrc imgTitleText imgAltInlines
+    where
+      imgTitleText = fromMaybe T.empty imgTitle
+      imgAltInlines = maybe mempty Pandoc.str imgAlt
+  Automerge.FigureMarker -> BlockNode $ PandocBlock $ Pandoc.Figure nullAttr emptyCaption []
+  Automerge.CaptionMarker -> BlockNode $ PandocReader.Caption
+  Automerge.HorizontalRuleMarker -> BlockNode $ PandocBlock $ Pandoc.HorizontalRule
+  Automerge.NoteRefMarker (Automerge.NoteId noteId) -> BlockNode $ NoteRef (PandocReader.NoteId noteId)
+  Automerge.NoteContentMarker (Automerge.NoteId noteId) -> BlockNode $ NoteContent (PandocReader.NoteId noteId)
 
 convertTextSpan :: Automerge.TextSpan -> Pandoc.Inlines
 convertTextSpan = convertMarksToInlines <*> convertTextToInlines
@@ -128,7 +135,7 @@ markToInlines :: Automerge.Mark -> Pandoc.Inlines -> Pandoc.Inlines
 markToInlines mark = case mark of
   Automerge.Strong -> Pandoc.strong
   Automerge.Emphasis -> Pandoc.emph
-  Automerge.LinkMark automergeLink -> Pandoc.link (url automergeLink) (title automergeLink)
+  Automerge.LinkMark automergeLink -> Pandoc.link (url automergeLink) (linkTitle automergeLink)
   Automerge.Code -> Pandoc.code . concatStrInlines
     where
       concatStrInlines :: Inlines -> T.Text
@@ -203,12 +210,12 @@ pruneNonPandocNodeNotes (Node node children) = Node node prunedChildren
         isNoteContentNode _ = False
 
 treeToPandocBlocks :: Tree DocNode -> Either PandocError Pandoc.Blocks
-treeToPandocBlocks tree = sequenceA (foldTree treeNodeToPandocBlock tree) >>= getBlockSeq
+treeToPandocBlocks tree = sequenceA (foldTree treeNodeToPandocElement tree) >>= getBlockSeq
 
-data BlockOrInlines = BlockElement Pandoc.Block | InlineElement Pandoc.Inlines
+data PandocElement = BlockElement Pandoc.Block | InlineElement Pandoc.Inlines | CaptionElement Pandoc.Caption
 
-treeNodeToPandocBlock :: DocNode -> [[Either PandocError BlockOrInlines]] -> [Either PandocError BlockOrInlines]
-treeNodeToPandocBlock node childrenNodes = case node of
+treeNodeToPandocElement :: DocNode -> [[Either PandocError PandocElement]] -> [Either PandocError PandocElement]
+treeNodeToPandocElement node childrenNodes = case node of
   Root -> concat childrenNodes
   (BlockNode (PandocBlock (Pandoc.Para _))) -> [fmap (BlockElement . Pandoc.Para . Pandoc.toList) (concatChildrenInlines childrenNodes)]
   (BlockNode (PandocBlock (Pandoc.Header level attr _))) -> [fmap (BlockElement . Pandoc.Header level attr . Pandoc.toList) (concatChildrenInlines childrenNodes)]
@@ -223,7 +230,9 @@ treeNodeToPandocBlock node childrenNodes = case node of
   (BlockNode (OrderedListItem)) -> wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes
   (BlockNode (PandocBlock (Pandoc.BulletList _))) -> [fmap (BlockElement . Pandoc.BulletList) (mapToChildBlocks childrenNodes)]
   (BlockNode (PandocBlock (Pandoc.OrderedList attrs _))) -> [fmap (BlockElement . Pandoc.OrderedList attrs) (mapToChildBlocks childrenNodes)]
-  (BlockNode (PandocBlock (Pandoc.BlockQuote _))) -> [fmap (BlockElement . Pandoc.BlockQuote) (traverseAssertingChildIsBlock . wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes)]
+  (BlockNode (PandocBlock (Pandoc.BlockQuote _))) -> [fmap (BlockElement . Pandoc.BlockQuote) (collectChildrenAsBlocks childrenNodes)]
+  (BlockNode (Caption)) -> [buildCaptionElement childrenNodes]
+  (BlockNode (PandocBlock (Pandoc.Figure attr _ _))) -> [buildFigureElement attr childrenNodes]
   (BlockNode (PandocBlock (Pandoc.HorizontalRule))) -> [Right $ BlockElement Pandoc.HorizontalRule]
   (BlockNode (NoteRef _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note ref node"]
   (BlockNode (NoteContent _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note content node"]
@@ -231,50 +240,89 @@ treeNodeToPandocBlock node childrenNodes = case node of
     -- A note can have block children, so it needs different handling compared to other inline nodes.
     -- We assume that Inline nodes contain a note only contain a single element since we are creating them in this module (see `replaceNoteRefsWithPandocNotes`).
     [Pandoc.Note []] ->
-      [fmap (InlineElement . Pandoc.singleton . Pandoc.Note) (traverseAssertingChildIsBlock . wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes)]
+      [fmap (InlineElement . Pandoc.singleton . Pandoc.Note) (collectChildrenAsBlocks childrenNodes)]
     -- In the generic case for inlines, just wrap them with a list of a single `InlineElement`.
     _ ->
       [Right $ InlineElement inlines]
   _ -> undefined
   where
-    concatChildrenInlines :: [[Either PandocError BlockOrInlines]] -> Either PandocError Pandoc.Inlines
+    concatChildrenInlines :: [[Either PandocError PandocElement]] -> Either PandocError Pandoc.Inlines
     concatChildrenInlines children = concatInlines $ map (>>= assertInlines) $ concat children
       where
         concatInlines :: [Either PandocError Pandoc.Inlines] -> Either PandocError Pandoc.Inlines
         concatInlines eitherInlines = fmap mconcat $ sequenceA eitherInlines
 
-    concatAdjacentInlines :: [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
+    collectChildrenAsBlocks :: [[Either PandocError PandocElement]] -> Either PandocError [Pandoc.Block]
+    collectChildrenAsBlocks = traverseAssertingChildIsBlock . wrapInlinesToPlain . concatAdjacentInlines . concat
+
+    buildCaptionElement :: [[Either PandocError PandocElement]] -> Either PandocError PandocElement
+    buildCaptionElement children = do
+      let (shortCap, restChildren) = splitShortCaptionAndBlocks $ concatAdjacentInlines $ concat children
+      blocks <- traverseAssertingChildIsBlock restChildren
+      pure $ CaptionElement $ Pandoc.caption shortCap (Pandoc.fromList blocks)
+      where
+        splitShortCaptionAndBlocks :: [Either PandocError PandocElement] -> (Maybe [Pandoc.Inline], [Either PandocError PandocElement])
+        splitShortCaptionAndBlocks (Right (InlineElement inlines) : rest) = (Just (Pandoc.toList inlines), rest)
+        splitShortCaptionAndBlocks items = (Nothing, items)
+
+    buildFigureElement :: Pandoc.Attr -> [[Either PandocError PandocElement]] -> Either PandocError PandocElement
+    buildFigureElement attr children = do
+      let (captionItems, blockChildren) = partitionFigureChildren $ concat children
+      figCaption <- buildFigureCaption captionItems
+      figBlocks <- collectChildrenAsBlocks [blockChildren]
+      pure $ BlockElement $ Pandoc.Figure attr figCaption figBlocks
+      where
+        partitionFigureChildren :: [Either PandocError PandocElement] -> ([Either PandocError PandocElement], [Either PandocError PandocElement])
+        partitionFigureChildren = partition isCaptionItem
+          where
+            isCaptionItem (Right (CaptionElement _)) = True
+            isCaptionItem _ = False
+
+        buildFigureCaption :: [Either PandocError PandocElement] -> Either PandocError Pandoc.Caption
+        buildFigureCaption [] = Right emptyCaption
+        buildFigureCaption [item] = item >>= assertCaption
+        buildFigureCaption _ = Left $ PandocSyntaxMapError "Error in mapping: figure has more than one caption"
+
+    concatAdjacentInlines :: [Either PandocError PandocElement] -> [Either PandocError PandocElement]
     concatAdjacentInlines = foldr mergeOrAppendAdjacent []
       where
-        mergeOrAppendAdjacent :: Either PandocError BlockOrInlines -> [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
+        mergeOrAppendAdjacent :: Either PandocError PandocElement -> [Either PandocError PandocElement] -> [Either PandocError PandocElement]
         mergeOrAppendAdjacent x [] = [x]
         mergeOrAppendAdjacent (Right (InlineElement currentInlines)) (Right (InlineElement firstOfRestInlines) : rest) =
           (Right (InlineElement (currentInlines <> firstOfRestInlines)) : rest)
         mergeOrAppendAdjacent x rest = (x : rest)
 
-    wrapInlinesToPlain :: [Either PandocError BlockOrInlines] -> [Either PandocError BlockOrInlines]
+    wrapInlinesToPlain :: [Either PandocError PandocElement] -> [Either PandocError PandocElement]
     wrapInlinesToPlain eitherInlines = (fmap . fmap) wrapInlines eitherInlines
       where
-        wrapInlines :: BlockOrInlines -> BlockOrInlines
+        wrapInlines :: PandocElement -> PandocElement
         wrapInlines (BlockElement block) = BlockElement block
+        wrapInlines (CaptionElement c) = CaptionElement c
         wrapInlines (InlineElement inlines) = BlockElement $ Pandoc.Plain $ Pandoc.toList inlines
 
-    mapToChildBlocks :: [[Either PandocError BlockOrInlines]] -> Either PandocError [[Pandoc.Block]]
+    mapToChildBlocks :: [[Either PandocError PandocElement]] -> Either PandocError [[Pandoc.Block]]
     mapToChildBlocks children = (traverse . traverse) (>>= assertBlock) children
 
-    traverseAssertingChildIsBlock :: [Either PandocError BlockOrInlines] -> Either PandocError [Pandoc.Block]
+    traverseAssertingChildIsBlock :: [Either PandocError PandocElement] -> Either PandocError [Pandoc.Block]
     traverseAssertingChildIsBlock children = traverse (>>= assertBlock) children
 
     firstInline :: Pandoc.Inlines -> Maybe Pandoc.Inline
     firstInline = firstValue
 
-getBlockSeq :: [BlockOrInlines] -> Either PandocError Pandoc.Blocks
+getBlockSeq :: [PandocElement] -> Either PandocError Pandoc.Blocks
 getBlockSeq = fmap Pandoc.fromList . traverse assertBlock
 
-assertBlock :: BlockOrInlines -> Either PandocError Pandoc.Block
+assertBlock :: PandocElement -> Either PandocError Pandoc.Block
 assertBlock (BlockElement block) = Right block
 assertBlock (InlineElement _) = Left $ PandocSyntaxMapError "Error in mapping: found orphan inline node"
+assertBlock (CaptionElement _) = Left $ PandocSyntaxMapError "Error in mapping: found orphan caption node"
 
-assertInlines :: BlockOrInlines -> Either PandocError Pandoc.Inlines
+assertInlines :: PandocElement -> Either PandocError Pandoc.Inlines
 assertInlines (BlockElement _) = Left $ PandocSyntaxMapError "Error in mapping: found block node in inline node slot"
+assertInlines (CaptionElement _) = Left $ PandocSyntaxMapError "Error in mapping: found caption node in inline node slot"
 assertInlines (InlineElement inlines) = Right $ inlines
+
+assertCaption :: PandocElement -> Either PandocError Pandoc.Caption
+assertCaption (CaptionElement c) = Right c
+assertCaption (BlockElement _) = Left $ PandocSyntaxMapError "Error in mapping: found block node in caption node slot"
+assertCaption (InlineElement _) = Left $ PandocSyntaxMapError "Error in mapping: found inline node in caption node slot"
