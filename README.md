@@ -8,7 +8,7 @@ CLI tool that converts [Automerge rich text](https://automerge.org/docs/referenc
 
 ## Prerequisites
 
-Install [Haskell Stack](https://docs.haskellstack.org/en/stable/#__tabbed_1_1) so that you can run the CLI.
+Install GHC and [cabal](https://www.haskell.org/cabal/), e.g. with [GHCup](https://www.haskell.org/ghcup/), so that you can run the CLI. Use the GHC version that `with-compiler` names in `cabal.project`, and a cabal version that supports it.
 
 ### MacOS
 
@@ -16,32 +16,32 @@ Pandoc needs [pkg-config](https://formulae.brew.sh/formula/pkgconf) to be built 
 
 ## How to Run
 
-Navigate to project root and run `stack build` to compile the project.
+Navigate to project root and run `cabal build` to compile the project.
 
 ### Convert from Automerge Spans
 
 #### To Pandoc AST
 
 ```
-stack exec automerge-pandoc fromAutomerge -- --to pandoc AUTOMERGE_SPANS_JSON
+cabal run automerge-pandoc -- fromAutomerge --to pandoc AUTOMERGE_SPANS_JSON
 ```
 
 #### To Markdown
 
 ```
-stack exec automerge-pandoc fromAutomerge -- --to markdown AUTOMERGE_SPANS_JSON
+cabal run automerge-pandoc -- fromAutomerge --to markdown AUTOMERGE_SPANS_JSON
 ```
 
 #### To HTML
 
 ```
-stack exec automerge-pandoc fromAutomerge -- --to html AUTOMERGE_SPANS_JSON
+cabal run automerge-pandoc -- fromAutomerge --to html AUTOMERGE_SPANS_JSON
 ```
 
 #### To JSON
 
 ```
-stack exec automerge-pandoc fromAutomerge -- --to json AUTOMERGE_SPANS_JSON
+cabal run automerge-pandoc -- fromAutomerge --to json AUTOMERGE_SPANS_JSON
 ```
 
 ### Convert to Automerge Spans
@@ -49,35 +49,44 @@ stack exec automerge-pandoc fromAutomerge -- --to json AUTOMERGE_SPANS_JSON
 #### From Pandoc AST
 
 ```
-stack exec automerge-pandoc toAutomerge -- --from pandoc PANDOC_AST
+cabal run automerge-pandoc -- toAutomerge --from pandoc PANDOC_AST
 ```
 
 #### From Markdown
 
 ```
-stack exec automerge-pandoc toAutomerge -- --from markdown MARKDOWN_STRING
+cabal run automerge-pandoc -- toAutomerge --from markdown MARKDOWN_STRING
 ```
 
 #### From HTML
 
 ```
-stack exec automerge-pandoc toAutomerge -- --from html HTML_STRING
+cabal run automerge-pandoc -- toAutomerge --from html HTML_STRING
 ```
 
 #### From JSON
 
 ```
-stack exec automerge-pandoc toAutomerge -- --from json JSON_STRING
+cabal run automerge-pandoc -- toAutomerge --from json JSON_STRING
 ```
-
-## Build for WebAssembly
-
-There are instructions for building the project for [WebAssembly](https://webassembly.org/) [here](https://github.com/arisgk/automerge-pandoc/blob/main/WASM_BUILD.md).
 
 ## Testing
 
 Navigate to the project root folder and run the following command to build and run the tests:
 
 ```
-stack build --test
+cabal test
 ```
+
+## Dependency Versions
+
+The dependencies are solved from the state of the package index in `index-state` in `cabal.project`, and `cabal.project.freeze` pins their versions. Commit both with any change to the dependencies.
+
+After adding or removing a dependency, run `cabal freeze`.
+
+To upgrade the dependencies:
+
+1. Run `cabal update`, which prints the state it updated the index to.
+2. Set `index-state` in `cabal.project` to that time.
+3. Delete `cabal.project.freeze` and run `cabal freeze`.
+4. Build, run the tests, and commit `cabal.project` together with `cabal.project.freeze`.
