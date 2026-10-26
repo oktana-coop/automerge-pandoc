@@ -8,6 +8,7 @@ import PandocReader (toPandoc)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hspec (testSpec)
+import Text.Pandoc (PandocError (PandocParseError))
 import Text.Pandoc.Builder as Pandoc (blockQuote, bulletList, caption, code, doc, emph, emptyCaption, figure, fromList, header, horizontalRule, image, link, note, orderedList, para, plain, simpleCaption, str, strong, toList)
 import Text.Pandoc.Class (runIO)
 
@@ -963,3 +964,15 @@ spec = do
       case result of
         Left err -> expectationFailure ("toPandoc failed: " <> show err)
         Right actual -> actual `shouldBe` Pandoc.doc expected
+  describe "Malformed spans" $ do
+    it "fails with a parse error for a caption outside a figure" $ do
+      let input =
+            [ Automerge.captionSpan [],
+              Automerge.textSpan "A caption"
+            ]
+
+      result <- runIO $ toPandoc input
+      case result of
+        Left (PandocParseError message) -> message `shouldBe` "Error in mapping: found orphan caption node"
+        Left err -> expectationFailure ("Expected a parse error, got: " <> show err)
+        Right actual -> expectationFailure ("Expected a parse error, got: " <> show actual)

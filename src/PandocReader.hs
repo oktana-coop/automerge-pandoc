@@ -11,7 +11,7 @@ import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Data.Tree (Tree (Node), foldTree, unfoldForest)
-import Text.Pandoc (PandocError (PandocParseError, PandocSyntaxMapError), ReaderOptions)
+import Text.Pandoc (PandocError (PandocParseError), ReaderOptions)
 import Text.Pandoc.Builder as Pandoc
   ( Attr,
     Block (..),
@@ -224,7 +224,7 @@ treeNodeToPandocElement node childrenNodes = case node of
         inlines <- concatChildrenInlines childrenNodes
         case firstInline inlines of
           Just (Str text) -> Right $ BlockElement $ Pandoc.CodeBlock attr text
-          _ -> Left $ PandocSyntaxMapError "Error in mapping: Could not extract code block text"
+          _ -> Left $ PandocParseError "Error in mapping: Could not extract code block text"
     ]
   (BlockNode (BulletListItem)) -> wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes
   (BlockNode (OrderedListItem)) -> wrapInlinesToPlain . concatAdjacentInlines $ concat childrenNodes
@@ -234,8 +234,8 @@ treeNodeToPandocElement node childrenNodes = case node of
   (BlockNode (Caption)) -> [buildCaptionElement childrenNodes]
   (BlockNode (PandocBlock (Pandoc.Figure attr _ _))) -> [buildFigureElement attr childrenNodes]
   (BlockNode (PandocBlock (Pandoc.HorizontalRule))) -> [Right $ BlockElement Pandoc.HorizontalRule]
-  (BlockNode (NoteRef _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note ref node"]
-  (BlockNode (NoteContent _)) -> [Left $ PandocSyntaxMapError "Error in mapping: found unmapped or orphan note content node"]
+  (BlockNode (NoteRef _)) -> [Left $ PandocParseError "Error in mapping: found unmapped or orphan note ref node"]
+  (BlockNode (NoteContent _)) -> [Left $ PandocParseError "Error in mapping: found unmapped or orphan note content node"]
   (InlineNode inlines) -> case Pandoc.toList inlines of
     -- A note can have block children, so it needs different handling compared to other inline nodes.
     -- We assume that Inline nodes contain a note only contain a single element since we are creating them in this module (see `replaceNoteRefsWithPandocNotes`).
@@ -281,7 +281,7 @@ treeNodeToPandocElement node childrenNodes = case node of
         buildFigureCaption :: [Either PandocError PandocElement] -> Either PandocError Pandoc.Caption
         buildFigureCaption [] = Right emptyCaption
         buildFigureCaption [item] = item >>= assertCaption
-        buildFigureCaption _ = Left $ PandocSyntaxMapError "Error in mapping: figure has more than one caption"
+        buildFigureCaption _ = Left $ PandocParseError "Error in mapping: figure has more than one caption"
 
     concatAdjacentInlines :: [Either PandocError PandocElement] -> [Either PandocError PandocElement]
     concatAdjacentInlines = foldr mergeOrAppendAdjacent []
@@ -314,15 +314,15 @@ getBlockSeq = fmap Pandoc.fromList . traverse assertBlock
 
 assertBlock :: PandocElement -> Either PandocError Pandoc.Block
 assertBlock (BlockElement block) = Right block
-assertBlock (InlineElement _) = Left $ PandocSyntaxMapError "Error in mapping: found orphan inline node"
-assertBlock (CaptionElement _) = Left $ PandocSyntaxMapError "Error in mapping: found orphan caption node"
+assertBlock (InlineElement _) = Left $ PandocParseError "Error in mapping: found orphan inline node"
+assertBlock (CaptionElement _) = Left $ PandocParseError "Error in mapping: found orphan caption node"
 
 assertInlines :: PandocElement -> Either PandocError Pandoc.Inlines
-assertInlines (BlockElement _) = Left $ PandocSyntaxMapError "Error in mapping: found block node in inline node slot"
-assertInlines (CaptionElement _) = Left $ PandocSyntaxMapError "Error in mapping: found caption node in inline node slot"
+assertInlines (BlockElement _) = Left $ PandocParseError "Error in mapping: found block node in inline node slot"
+assertInlines (CaptionElement _) = Left $ PandocParseError "Error in mapping: found caption node in inline node slot"
 assertInlines (InlineElement inlines) = Right $ inlines
 
 assertCaption :: PandocElement -> Either PandocError Pandoc.Caption
 assertCaption (CaptionElement c) = Right c
-assertCaption (BlockElement _) = Left $ PandocSyntaxMapError "Error in mapping: found block node in caption node slot"
-assertCaption (InlineElement _) = Left $ PandocSyntaxMapError "Error in mapping: found inline node in caption node slot"
+assertCaption (BlockElement _) = Left $ PandocParseError "Error in mapping: found block node in caption node slot"
+assertCaption (InlineElement _) = Left $ PandocParseError "Error in mapping: found inline node in caption node slot"
